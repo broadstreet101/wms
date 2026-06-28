@@ -1,5 +1,3 @@
-import { normalizeItem } from "./storage.js";
-
 export function exportBackup(items) {
   const backup = {
     app: "Where’s My Stuff",
@@ -36,7 +34,7 @@ export function parseBackupFile(file) {
           throw new Error("Invalid backup format.");
         }
 
-        resolve(importedItems.map(normalizeItem).filter(item => item.name && item.location));
+        resolve(importedItems);
       } catch (error) {
         reject(error);
       }

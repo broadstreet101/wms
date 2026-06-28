@@ -23,6 +23,10 @@ export const elements = {
   importFile: document.getElementById("importFile"),
   clearButton: document.getElementById("clearButton"),
   signInButton: document.getElementById("signInButton"),
+  authProfile: document.getElementById("authProfile"),
+  authPhoto: document.getElementById("authPhoto"),
+  authName: document.getElementById("authName"),
+  authEmail: document.getElementById("authEmail"),
   signOutButton: document.getElementById("signOutButton"),
   authStatus: document.getElementById("authStatus")
 };

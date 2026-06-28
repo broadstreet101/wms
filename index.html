@@ -19,10 +19,17 @@
     <h1>Where's My Stuff</h1>
     <p>For important things you put somewhere "safe" and then immediately betrayed yourself by forgetting.</p>
 
-    <section class="auth-panel" aria-label="User sign-in">
+    <section class="auth-panel" aria-label="User account">
         <button id="signInButton" type="button">Sign in with Google</button>
-        <button id="signOutButton" type="button" hidden>Sign out</button>
-        <p id="authStatus">Not signed in</p>
+        <div class="auth-profile" id="authProfile" hidden>
+            <img class="auth-photo" id="authPhoto" alt="" referrerpolicy="no-referrer" />
+            <div class="auth-details">
+                <strong id="authName"></strong>
+                <span id="authEmail"></span>
+                <span id="authStatus"></span>
+            </div>
+            <button id="signOutButton" type="button" class="secondary">Sign Out</button>
+        </div>
     </section>
 </header>
   <main>
@@ -100,7 +107,7 @@
     </div>
 
     <section class="items-section" id="itemsList"></section>
-    <div class="footer-note">Version 4.1 · Google sign-in enabled · local storage preserved</div>
+    <div class="footer-note">Version 4.2 · Authentication UI · local storage preserved</div>
   </main>
 
   <script type="module" src="js/app.js"></script>

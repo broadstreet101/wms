@@ -4,14 +4,16 @@ import {
   watchAuthState
 } from "./firebase.js";
 import {
-  deleteCloudItem,
-  loadItems,
-  makeId,
-  migrateLocalItemsToCloudIfEmpty,
-  replaceCloudItems,
-  saveCloudItem,
-  saveItems
-} from "./storage.js";
+  deleteItem as deleteStoredItem,
+  exportItems,
+  getItems,
+  importItems,
+  saveItem as saveStoredItem,
+  setAuthenticatedUser,
+  subscribeItems,
+  unsubscribeItems,
+  updateItem as updateStoredItem
+} from "./dataService.js";
 import { getFilteredItems } from "./search.js";
 import { exportBackup, parseBackupFile } from "./backup.js";
 import {
@@ -23,9 +25,9 @@ import {
   renderItems
 } from "./ui.js";
 
-let items = loadItems();
+let items = [];
 let currentUser = null;
-let cloudReady = false;
+let signInInProgress = false;
 
 function render() {
   const filtered = getFilteredItems(
@@ -38,20 +40,9 @@ function render() {
   renderItems(items, filtered);
 }
 
-async function persistItem(item) {
-  saveItems(items);
-
-  if (currentUser && cloudReady) {
-    await saveCloudItem(currentUser.uid, item);
-  }
-}
-
-async function persistAllItems() {
-  saveItems(items);
-
-  if (currentUser && cloudReady) {
-    await replaceCloudItems(currentUser.uid, items);
-  }
+function syncItems(nextItems) {
+  items = nextItems;
+  render();
 }
 
 async function upsertItem(formData) {
@@ -59,24 +50,19 @@ async function upsertItem(formData) {
   let itemToSave;
 
   if (formData.id) {
-    items = items.map(item => {
-      if (item.id !== formData.id) return item;
-
-      itemToSave = {
-        ...item,
-        name: formData.name,
-        location: formData.location,
-        category: formData.category,
-        room: formData.room,
-        notes: formData.notes,
-        updatedAt: now
-      };
-
-      return itemToSave;
+    itemToSave = await updateStoredItem({
+      id: formData.id,
+      name: formData.name,
+      location: formData.location,
+      category: formData.category,
+      room: formData.room,
+      notes: formData.notes,
+      updatedAt: now
     });
+
+    if (!itemToSave) return;
   } else {
-    itemToSave = {
-      id: makeId(),
+    itemToSave = await saveStoredItem({
       name: formData.name,
       location: formData.location,
       category: formData.category,
@@ -84,20 +70,12 @@ async function upsertItem(formData) {
       notes: formData.notes,
       createdAt: now,
       updatedAt: now
-    };
-
-    items.push(itemToSave);
+    });
   }
 
+  items = await getItems();
   resetForm();
   render();
-
-  try {
-    await persistItem(itemToSave);
-  } catch (error) {
-    console.error("Save failed:", error);
-    alert("The item was saved locally, but cloud sync failed. Check the console for details.");
-  }
 }
 
 async function deleteItem(id) {
@@ -107,18 +85,8 @@ async function deleteItem(id) {
   const confirmed = confirm(`Delete "${item.name}"?`);
   if (!confirmed) return;
 
-  items = items.filter(item => item.id !== id);
-  saveItems(items);
+  items = await deleteStoredItem(id);
   render();
-
-  if (currentUser && cloudReady) {
-    try {
-      await deleteCloudItem(currentUser.uid, id);
-    } catch (error) {
-      console.error("Cloud delete failed:", error);
-      alert("The item was deleted locally, but cloud sync failed. Check the console for details.");
-    }
-  }
 }
 
 function editItem(id) {
@@ -138,23 +106,50 @@ function registerServiceWorker() {
 
 function updateAuthDisplay(user, message) {
   if (user) {
-    elements.authStatus.textContent = message || `Signed in as ${user.displayName || user.email} · Cloud sync on`;
+    const displayName = user.displayName || "Google user";
+    const email = user.email || "";
+
+    elements.authName.textContent = displayName;
+    elements.authEmail.textContent = email;
+    elements.authStatus.textContent = message || "Cloud sync on";
+    elements.authPhoto.src = user.photoURL || "";
+    elements.authPhoto.alt = `${displayName} profile photo`;
+    elements.authPhoto.hidden = !user.photoURL;
+    elements.authProfile.hidden = false;
     elements.signInButton.hidden = true;
+    elements.signInButton.disabled = false;
     elements.signOutButton.hidden = false;
   } else {
-    elements.authStatus.textContent = "Not signed in · Local-only mode";
+    elements.authName.textContent = "";
+    elements.authEmail.textContent = "";
+    elements.authStatus.textContent = "";
+    elements.authPhoto.removeAttribute("src");
+    elements.authPhoto.alt = "";
+    elements.authPhoto.hidden = true;
+    elements.authProfile.hidden = true;
     elements.signInButton.hidden = false;
+    elements.signInButton.disabled = false;
     elements.signOutButton.hidden = true;
   }
 }
 
 function setupAuth() {
   elements.signInButton.addEventListener("click", async () => {
+    if (signInInProgress) return;
+
+    signInInProgress = true;
+    elements.signInButton.disabled = true;
+
     try {
       await signInWithGoogle();
     } catch (error) {
       console.error("Google sign-in failed:", error);
       alert("Google sign-in failed. Check the browser console for details.");
+    } finally {
+      signInInProgress = false;
+      if (!currentUser) {
+        elements.signInButton.disabled = false;
+      }
     }
   });
 
@@ -169,31 +164,22 @@ function setupAuth() {
 
   watchAuthState(async user => {
     currentUser = user;
-    cloudReady = false;
+    setAuthenticatedUser(user);
 
     if (!user) {
-      items = loadItems();
+      unsubscribeItems();
+      items = await getItems();
       updateAuthDisplay(null);
       render();
       return;
     }
 
-    updateAuthDisplay(user, `Signed in as ${user.displayName || user.email} · Loading cloud items...`);
+    updateAuthDisplay(user, "Loading cloud items...");
 
-    try {
-      const localItems = loadItems();
-      items = await migrateLocalItemsToCloudIfEmpty(user.uid, localItems);
-      saveItems(items);
-      cloudReady = true;
-      updateAuthDisplay(user);
-      render();
-    } catch (error) {
-      console.error("Cloud load failed:", error);
-      items = loadItems();
-      updateAuthDisplay(user, `Signed in as ${user.displayName || user.email} · Cloud sync unavailable`);
-      render();
-      alert("Signed in, but cloud items could not load. Check Firestore rules and the browser console.");
-    }
+    items = await getItems();
+    updateAuthDisplay(user);
+    render();
+    subscribeItems(syncItems);
   });
 }
 
@@ -217,7 +203,8 @@ elements.itemsList.addEventListener("click", async event => {
   if (button.dataset.action === "delete") await deleteItem(id);
 });
 
-elements.exportButton.addEventListener("click", () => {
+elements.exportButton.addEventListener("click", async () => {
+  items = await exportItems();
   exportBackup(items);
 });
 
@@ -233,8 +220,7 @@ elements.importFile.addEventListener("change", async event => {
     );
     if (!confirmed) return;
 
-    items = importedItems;
-    await persistAllItems();
+    items = await importItems(importedItems);
     resetForm();
     render();
     alert("Backup imported successfully.");
@@ -254,14 +240,19 @@ elements.clearButton.addEventListener("click", async () => {
   );
   if (!confirmed) return;
 
-  items = [];
-  await persistAllItems();
+  items = await importItems([]);
   resetForm();
   render();
 });
 
-populateCategoryControls();
-resetForm();
-render();
-setupAuth();
-registerServiceWorker();
+async function initializeApp() {
+  populateCategoryControls();
+  resetForm();
+  setAuthenticatedUser(null);
+  items = await getItems();
+  render();
+  setupAuth();
+  registerServiceWorker();
+}
+
+initializeApp();

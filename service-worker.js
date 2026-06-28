@@ -1,4 +1,4 @@
-const CACHE_NAME = "wheres-my-stuff-v4";
+const CACHE_NAME = "wheres-my-stuff-v8";
 const FILES_TO_CACHE = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const FILES_TO_CACHE = [
   "./js/app.js",
   "./js/backup.js",
   "./js/config.js",
+  "./js/dataService.js",
   "./js/search.js",
   "./js/storage.js",
   "./js/ui.js",
