@@ -21,7 +21,10 @@ export const elements = {
   categoryCount: document.getElementById("categoryCount"),
   exportButton: document.getElementById("exportButton"),
   importFile: document.getElementById("importFile"),
-  clearButton: document.getElementById("clearButton")
+  clearButton: document.getElementById("clearButton"),
+  signInButton: document.getElementById("signInButton"),
+  signOutButton: document.getElementById("signOutButton"),
+  authStatus: document.getElementById("authStatus")
 };
 
 export function populateCategoryControls() {
@@ -85,7 +88,9 @@ export function renderItems(items, filteredItems) {
     return;
   }
 
-  elements.itemsList.innerHTML = filteredItems.map(item => `
+  elements.itemsList.innerHTML = filteredItems
+    .map(
+      item => `
     <article class="item">
       <h3>${escapeHtml(item.name)}</h3>
       <span class="pill">${escapeHtml(item.category || "Other")}</span>
@@ -101,5 +106,7 @@ export function renderItems(items, filteredItems) {
         <button class="small danger" data-action="delete" data-id="${escapeHtml(item.id)}">Delete</button>
       </div>
     </article>
-  `).join("");
+  `
+    )
+    .join("");
 }

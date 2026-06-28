@@ -15,7 +15,13 @@
   --radius: 20px;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
 
 body {
   margin: 0;
@@ -40,7 +46,7 @@ header {
   padding: 0.35rem 0.65rem;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: rgba(255,255,255,0.75);
+  background: rgba(255, 255, 255, 0.75);
   color: var(--muted);
   font-size: 0.85rem;
   font-weight: 700;
@@ -60,6 +66,21 @@ header p {
   font-size: 1rem;
 }
 
+.auth-panel {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0.9rem auto 0;
+}
+
+.auth-panel p {
+  flex-basis: 100%;
+  margin-top: 0.2rem;
+  font-size: 0.9rem;
+}
+
 main {
   width: min(980px, 100%);
   margin: 0 auto;
@@ -74,7 +95,9 @@ main {
 }
 
 @media (min-width: 860px) {
-  .grid { grid-template-columns: 0.9fr 1.1fr; }
+  .grid {
+    grid-template-columns: 0.9fr 1.1fr;
+  }
 }
 
 .card {
@@ -105,7 +128,9 @@ label {
   font-size: 0.92rem;
 }
 
-input, textarea, select {
+input,
+textarea,
+select {
   width: 100%;
   padding: 0.82rem 0.88rem;
   border: 1px solid var(--border);
@@ -114,10 +139,14 @@ input, textarea, select {
   background: #fff;
   color: var(--text);
   outline: none;
-  transition: border 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
-input:focus, textarea:focus, select:focus {
+input:focus,
+textarea:focus,
+select:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 }
@@ -134,7 +163,9 @@ textarea {
 }
 
 @media (min-width: 620px) {
-  .row { grid-template-columns: 1fr 1fr; }
+  .row {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .buttons {
@@ -144,7 +175,8 @@ textarea {
   margin-top: 1rem;
 }
 
-button, .file-label {
+button,
+.file-label {
   border: 0;
   border-radius: 14px;
   padding: 0.78rem 0.95rem;
@@ -158,20 +190,27 @@ button, .file-label {
   justify-content: center;
   gap: 0.35rem;
   box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
-  transition: transform 0.12s ease, background 0.12s ease;
+  transition:
+    transform 0.12s ease,
+    background 0.12s ease;
 }
 
-button:hover, .file-label:hover {
+button:hover,
+.file-label:hover {
   background: var(--primary-dark);
   transform: translateY(-1px);
 }
 
-button.secondary, .file-label.secondary {
+button.secondary,
+.file-label.secondary {
   background: #475569;
   box-shadow: 0 8px 18px rgba(71, 85, 105, 0.14);
 }
 
-button.secondary:hover, .file-label.secondary:hover { background: #334155; }
+button.secondary:hover,
+.file-label.secondary:hover {
+  background: #334155;
+}
 
 button.ghost {
   color: var(--text);
@@ -180,14 +219,18 @@ button.ghost {
   border: 1px solid var(--border);
 }
 
-button.ghost:hover { background: #e2e8f0; }
+button.ghost:hover {
+  background: #e2e8f0;
+}
 
 button.danger {
   background: var(--danger);
   box-shadow: 0 8px 18px rgba(220, 38, 38, 0.14);
 }
 
-button.danger:hover { background: var(--danger-dark); }
+button.danger:hover {
+  background: var(--danger-dark);
+}
 
 button.small {
   padding: 0.58rem 0.75rem;
@@ -195,7 +238,9 @@ button.small {
   border-radius: 12px;
 }
 
-input[type="file"] { display: none; }
+input[type="file"] {
+  display: none;
+}
 
 .toolbar {
   display: grid;
@@ -288,7 +333,7 @@ input[type="file"] { display: none; }
   padding: 2rem 1rem;
   border: 1px dashed var(--border);
   border-radius: 18px;
-  background: rgba(255,255,255,0.8);
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .notice {

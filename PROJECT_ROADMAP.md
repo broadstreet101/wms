@@ -2,16 +2,17 @@
 
 ## Current Version
 
-Version 3 — Refactored local prototype
+Version 4.1 — Google Authentication added, local storage preserved
 
 ## Current Architecture
 
 - GitHub Pages hosts the app.
 - Browser runs the app.
-- localStorage stores item data locally per device.
+- `localStorage` still stores item data locally per device.
 - Firebase project exists.
 - Google Authentication is enabled.
-- Cloud Firestore database exists.
+- Cloud Firestore database exists but is not used by the app yet.
+- Firebase Auth is connected through `js/firebase.js`.
 
 ## Completed
 
@@ -26,22 +27,28 @@ Version 3 — Refactored local prototype
 - GitHub Pages deployment
 - VS Code local development setup
 - Firebase project setup
+- Google sign-in UI
+- Firebase Authentication module
 
-## Next Milestone
+## Current Milestone
 
-Version 4 — Google Sign-In
+Version 4.1 — Google Sign-In
 
 Goal:
 - Add Sign in with Google button.
 - Show signed-in user.
-- Keep existing localStorage behavior unchanged.
+- Allow sign-out.
+- Keep existing `localStorage` behavior unchanged.
 
-## Later Milestones
+## Next Milestone
 
 Version 5 — Cloud Firestore Sync
 
 - Save inventory items to Firestore.
 - Sync across devices.
+- Preserve a migration path from local-only items.
+
+## Later Milestone
 
 Version 6 — Shared Household Inventory
 

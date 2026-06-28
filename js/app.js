@@ -1,3 +1,8 @@
+import {
+  signInWithGoogle,
+  signOutUser,
+  watchAuthState
+} from "./firebase.js";
 import { loadItems, saveItems, makeId } from "./storage.js";
 import { getFilteredItems } from "./search.js";
 import { exportBackup, parseBackupFile } from "./backup.js";
@@ -27,15 +32,19 @@ function upsertItem(formData) {
   const now = new Date().toISOString();
 
   if (formData.id) {
-    items = items.map(item => item.id !== formData.id ? item : {
-      ...item,
-      name: formData.name,
-      location: formData.location,
-      category: formData.category,
-      room: formData.room,
-      notes: formData.notes,
-      updatedAt: now
-    });
+    items = items.map(item =>
+      item.id !== formData.id
+        ? item
+        : {
+            ...item,
+            name: formData.name,
+            location: formData.location,
+            category: formData.category,
+            room: formData.room,
+            notes: formData.notes,
+            updatedAt: now
+          }
+    );
   } else {
     items.push({
       id: makeId(),
@@ -81,6 +90,40 @@ function registerServiceWorker() {
   });
 }
 
+function updateAuthDisplay(user) {
+  if (user) {
+    elements.authStatus.textContent = `Signed in as ${user.displayName || user.email}`;
+    elements.signInButton.hidden = true;
+    elements.signOutButton.hidden = false;
+  } else {
+    elements.authStatus.textContent = "Not signed in";
+    elements.signInButton.hidden = false;
+    elements.signOutButton.hidden = true;
+  }
+}
+
+function setupAuth() {
+  elements.signInButton.addEventListener("click", async () => {
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      console.error("Google sign-in failed:", error);
+      alert("Google sign-in failed. Check the browser console for details.");
+    }
+  });
+
+  elements.signOutButton.addEventListener("click", async () => {
+    try {
+      await signOutUser();
+    } catch (error) {
+      console.error("Sign-out failed:", error);
+      alert("Sign-out failed. Check the browser console for details.");
+    }
+  });
+
+  watchAuthState(updateAuthDisplay);
+}
+
 elements.itemForm.addEventListener("submit", event => {
   event.preventDefault();
   upsertItem(readForm());
@@ -112,7 +155,9 @@ elements.importFile.addEventListener("change", async event => {
   try {
     const importedItems = await parseBackupFile(file);
 
-    const confirmed = confirm("Import this backup? This will replace your current saved items in this browser.");
+    const confirmed = confirm(
+      "Import this backup? This will replace your current saved items in this browser."
+    );
     if (!confirmed) return;
 
     items = importedItems;
@@ -130,7 +175,9 @@ elements.importFile.addEventListener("change", async event => {
 elements.clearButton.addEventListener("click", () => {
   if (items.length === 0) return;
 
-  const confirmed = confirm("Delete ALL saved items from this browser? Export a backup first if you might need them.");
+  const confirmed = confirm(
+    "Delete ALL saved items from this browser? Export a backup first if you might need them."
+  );
   if (!confirmed) return;
 
   items = [];
@@ -142,4 +189,5 @@ elements.clearButton.addEventListener("click", () => {
 populateCategoryControls();
 resetForm();
 render();
+setupAuth();
 registerServiceWorker();

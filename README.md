@@ -11,11 +11,16 @@ A small local-first household inventory app for remembering where important thin
 - Sort by recent update, item name, or category
 - Export backup as JSON
 - Import backup from JSON
-- Stores data locally in the browser using `localStorage`
+- Stores item data locally in the browser using `localStorage`
+- Google sign-in UI and Firebase Authentication connection
 
-## Version 3 refactor
+## Version 4.1
 
-The app is now split into separate HTML, CSS, and JavaScript modules.
+Version 4.1 adds Google Authentication while preserving all existing local functionality.
+
+Important: signing in does **not** sync item data yet. Item data remains stored only in the current browser until the Firestore sync milestone is added.
+
+## Project structure
 
 ```text
 wms/
@@ -26,6 +31,7 @@ wms/
 │   ├── app.js
 │   ├── backup.js
 │   ├── config.js
+│   ├── firebase.js
 │   ├── search.js
 │   ├── storage.js
 │   ├── ui.js
@@ -35,11 +41,12 @@ wms/
 │       └── icon.svg
 ├── manifest.json
 ├── service-worker.js
+├── PROJECT_ROADMAP.md
 └── README.md
 ```
 
 ## Current limitation
 
-This version does **not** sync between devices or family members yet.
+This version authenticates users but does **not** sync between devices or family members yet.
 
-Next planned step: Firebase Authentication + Cloud Firestore for secure shared family inventory.
+Next planned step: Cloud Firestore sync for secure shared family inventory.

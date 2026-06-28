@@ -14,12 +14,17 @@
 </head>
 
 <body>
-  <header>
+<header>
     <div class="app-badge">📦 Local-first household inventory</div>
-    <h1>Where’s My Stuff</h1>
-    <p>For important things you put somewhere “safe” and then immediately betrayed yourself by forgetting.</p>
-  </header>
+    <h1>Where's My Stuff</h1>
+    <p>For important things you put somewhere "safe" and then immediately betrayed yourself by forgetting.</p>
 
+    <section class="auth-panel" aria-label="User sign-in">
+        <button id="signInButton" type="button">Sign in with Google</button>
+        <button id="signOutButton" type="button" hidden>Sign out</button>
+        <p id="authStatus">Not signed in</p>
+    </section>
+</header>
   <main>
     <div class="grid">
       <section class="card">
@@ -95,7 +100,7 @@
     </div>
 
     <section class="items-section" id="itemsList"></section>
-    <div class="footer-note">Version 3 refactor · GitHub/PWA-ready local prototype · next: Firebase login/shared inventory</div>
+    <div class="footer-note">Version 4.1 · Google sign-in enabled · local storage preserved</div>
   </main>
 
   <script type="module" src="js/app.js"></script>
