@@ -3,7 +3,15 @@ import {
   signOutUser,
   watchAuthState
 } from "./firebase.js";
-import { loadItems, saveItems, makeId } from "./storage.js";
+import {
+  deleteCloudItem,
+  loadItems,
+  makeId,
+  migrateLocalItemsToCloudIfEmpty,
+  replaceCloudItems,
+  saveCloudItem,
+  saveItems
+} from "./storage.js";
 import { getFilteredItems } from "./search.js";
 import { exportBackup, parseBackupFile } from "./backup.js";
 import {
@@ -16,6 +24,8 @@ import {
 } from "./ui.js";
 
 let items = loadItems();
+let currentUser = null;
+let cloudReady = false;
 
 function render() {
   const filtered = getFilteredItems(
@@ -28,25 +38,44 @@ function render() {
   renderItems(items, filtered);
 }
 
-function upsertItem(formData) {
+async function persistItem(item) {
+  saveItems(items);
+
+  if (currentUser && cloudReady) {
+    await saveCloudItem(currentUser.uid, item);
+  }
+}
+
+async function persistAllItems() {
+  saveItems(items);
+
+  if (currentUser && cloudReady) {
+    await replaceCloudItems(currentUser.uid, items);
+  }
+}
+
+async function upsertItem(formData) {
   const now = new Date().toISOString();
+  let itemToSave;
 
   if (formData.id) {
-    items = items.map(item =>
-      item.id !== formData.id
-        ? item
-        : {
-            ...item,
-            name: formData.name,
-            location: formData.location,
-            category: formData.category,
-            room: formData.room,
-            notes: formData.notes,
-            updatedAt: now
-          }
-    );
+    items = items.map(item => {
+      if (item.id !== formData.id) return item;
+
+      itemToSave = {
+        ...item,
+        name: formData.name,
+        location: formData.location,
+        category: formData.category,
+        room: formData.room,
+        notes: formData.notes,
+        updatedAt: now
+      };
+
+      return itemToSave;
+    });
   } else {
-    items.push({
+    itemToSave = {
       id: makeId(),
       name: formData.name,
       location: formData.location,
@@ -55,15 +84,23 @@ function upsertItem(formData) {
       notes: formData.notes,
       createdAt: now,
       updatedAt: now
-    });
+    };
+
+    items.push(itemToSave);
   }
 
-  saveItems(items);
   resetForm();
   render();
+
+  try {
+    await persistItem(itemToSave);
+  } catch (error) {
+    console.error("Save failed:", error);
+    alert("The item was saved locally, but cloud sync failed. Check the console for details.");
+  }
 }
 
-function deleteItem(id) {
+async function deleteItem(id) {
   const item = items.find(item => item.id === id);
   if (!item) return;
 
@@ -73,6 +110,15 @@ function deleteItem(id) {
   items = items.filter(item => item.id !== id);
   saveItems(items);
   render();
+
+  if (currentUser && cloudReady) {
+    try {
+      await deleteCloudItem(currentUser.uid, id);
+    } catch (error) {
+      console.error("Cloud delete failed:", error);
+      alert("The item was deleted locally, but cloud sync failed. Check the console for details.");
+    }
+  }
 }
 
 function editItem(id) {
@@ -90,13 +136,13 @@ function registerServiceWorker() {
   });
 }
 
-function updateAuthDisplay(user) {
+function updateAuthDisplay(user, message) {
   if (user) {
-    elements.authStatus.textContent = `Signed in as ${user.displayName || user.email}`;
+    elements.authStatus.textContent = message || `Signed in as ${user.displayName || user.email} · Cloud sync on`;
     elements.signInButton.hidden = true;
     elements.signOutButton.hidden = false;
   } else {
-    elements.authStatus.textContent = "Not signed in";
+    elements.authStatus.textContent = "Not signed in · Local-only mode";
     elements.signInButton.hidden = false;
     elements.signOutButton.hidden = true;
   }
@@ -121,12 +167,39 @@ function setupAuth() {
     }
   });
 
-  watchAuthState(updateAuthDisplay);
+  watchAuthState(async user => {
+    currentUser = user;
+    cloudReady = false;
+
+    if (!user) {
+      items = loadItems();
+      updateAuthDisplay(null);
+      render();
+      return;
+    }
+
+    updateAuthDisplay(user, `Signed in as ${user.displayName || user.email} · Loading cloud items...`);
+
+    try {
+      const localItems = loadItems();
+      items = await migrateLocalItemsToCloudIfEmpty(user.uid, localItems);
+      saveItems(items);
+      cloudReady = true;
+      updateAuthDisplay(user);
+      render();
+    } catch (error) {
+      console.error("Cloud load failed:", error);
+      items = loadItems();
+      updateAuthDisplay(user, `Signed in as ${user.displayName || user.email} · Cloud sync unavailable`);
+      render();
+      alert("Signed in, but cloud items could not load. Check Firestore rules and the browser console.");
+    }
+  });
 }
 
-elements.itemForm.addEventListener("submit", event => {
+elements.itemForm.addEventListener("submit", async event => {
   event.preventDefault();
-  upsertItem(readForm());
+  await upsertItem(readForm());
 });
 
 elements.cancelEditButton.addEventListener("click", resetForm);
@@ -134,14 +207,14 @@ elements.searchInput.addEventListener("input", render);
 elements.categoryFilter.addEventListener("change", render);
 elements.sortMode.addEventListener("change", render);
 
-elements.itemsList.addEventListener("click", event => {
+elements.itemsList.addEventListener("click", async event => {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
 
   const id = button.dataset.id;
 
   if (button.dataset.action === "edit") editItem(id);
-  if (button.dataset.action === "delete") deleteItem(id);
+  if (button.dataset.action === "delete") await deleteItem(id);
 });
 
 elements.exportButton.addEventListener("click", () => {
@@ -156,32 +229,33 @@ elements.importFile.addEventListener("change", async event => {
     const importedItems = await parseBackupFile(file);
 
     const confirmed = confirm(
-      "Import this backup? This will replace your current saved items in this browser."
+      "Import this backup? This will replace your current saved items in this browser and cloud account."
     );
     if (!confirmed) return;
 
     items = importedItems;
-    saveItems(items);
+    await persistAllItems();
     resetForm();
     render();
     alert("Backup imported successfully.");
-  } catch {
+  } catch (error) {
+    console.error("Import failed:", error);
     alert("Import failed. This does not look like a valid backup file.");
   } finally {
     elements.importFile.value = "";
   }
 });
 
-elements.clearButton.addEventListener("click", () => {
+elements.clearButton.addEventListener("click", async () => {
   if (items.length === 0) return;
 
   const confirmed = confirm(
-    "Delete ALL saved items from this browser? Export a backup first if you might need them."
+    "Delete ALL saved items from this browser and cloud account? Export a backup first if you might need them."
   );
   if (!confirmed) return;
 
   items = [];
-  saveItems(items);
+  await persistAllItems();
   resetForm();
   render();
 });
