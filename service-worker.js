@@ -1,9 +1,17 @@
-const CACHE_NAME = "wheres-my-stuff-v1";
+const CACHE_NAME = "wheres-my-stuff-v3";
 const FILES_TO_CACHE = [
   "./",
   "./index.html",
+  "./css/styles.css",
+  "./js/app.js",
+  "./js/backup.js",
+  "./js/config.js",
+  "./js/search.js",
+  "./js/storage.js",
+  "./js/ui.js",
+  "./js/utils.js",
   "./manifest.json",
-  "./icon.svg"
+  "./assets/icons/icon.svg"
 ];
 
 self.addEventListener("install", event => {
