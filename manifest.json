@@ -1,0 +1,17 @@
+{
+  "name": "Where\u2019s My Stuff",
+  "short_name": "My Stuff",
+  "description": "A local-first household inventory app for remembering where important things are stored.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#eef3f8",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
