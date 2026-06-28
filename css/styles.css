@@ -35,6 +35,8 @@ body {
 }
 
 header {
+  width: min(980px, 100%);
+  margin: 0 auto;
   padding: 2rem 1rem 1.25rem;
   text-align: center;
 }
@@ -67,17 +69,18 @@ header p {
 }
 
 .auth-panel {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: grid;
+  justify-items: center;
   gap: 0.6rem;
-  flex-wrap: wrap;
+  width: min(100%, 520px);
   margin: 0.9rem auto 0;
+  text-align: center;
 }
 
 .auth-panel p {
-  flex-basis: 100%;
-  margin-top: 0.2rem;
+  width: 100%;
+  max-width: 100%;
+  margin: 0.2rem 0 0;
   font-size: 0.9rem;
 }
 
