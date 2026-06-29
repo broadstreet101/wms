@@ -114,6 +114,40 @@ export function saveLocations(locations) {
   localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(locations.map(normalizeLocation)));
 }
 
+export async function loadUserHouseholds(userId) {
+  const membershipsSnapshot = await getDocs(getUserMembershipsCollection(userId));
+  const memberships = membershipsSnapshot.docs
+    .map(documentSnapshot => ({
+      householdId: documentSnapshot.id,
+      ...documentSnapshot.data()
+    }))
+    .filter(membership => membership.status !== "removed");
+
+  const households = await Promise.all(
+    memberships.map(async membership => {
+      const householdSnapshot = await getDoc(getHouseholdDocument(membership.householdId));
+      if (!householdSnapshot.exists()) return null;
+
+      return {
+        id: membership.householdId,
+        role: membership.role || "member",
+        ...householdSnapshot.data()
+      };
+    })
+  );
+
+  return households
+    .filter(Boolean)
+    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+}
+
+export async function isActiveHouseholdMember(userId, householdId) {
+  if (!householdId) return false;
+
+  const membershipSnapshot = await getDoc(getUserMembershipDocument(userId, householdId));
+  return membershipSnapshot.exists() && membershipSnapshot.data().status !== "removed";
+}
+
 export async function ensureDefaultHousehold(user) {
   const now = new Date().toISOString();
   const userId = user.uid;

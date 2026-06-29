@@ -29,7 +29,9 @@ export const elements = {
   authName: document.getElementById("authName"),
   authEmail: document.getElementById("authEmail"),
   signOutButton: document.getElementById("signOutButton"),
-  authStatus: document.getElementById("authStatus")
+  authStatus: document.getElementById("authStatus"),
+  householdName: document.getElementById("householdName"),
+  householdSelect: document.getElementById("householdSelect")
 };
 
 export function populateCategoryControls() {
@@ -88,6 +90,25 @@ export function renderLocationOptions(locations) {
       return `<option value="${escapeHtml(location.name)}" label="${escapeHtml(label)}"></option>`;
     })
     .join("");
+}
+
+export function renderHouseholdDisplay(households, activeHousehold) {
+  const hasMultipleHouseholds = households.length > 1;
+  const householdName = activeHousehold?.name || "My Household";
+
+  elements.householdName.textContent = activeHousehold ? `Household: ${householdName}` : "";
+  elements.householdName.hidden = !activeHousehold;
+  elements.householdSelect.hidden = !hasMultipleHouseholds;
+
+  if (!hasMultipleHouseholds) {
+    elements.householdSelect.innerHTML = "";
+    return;
+  }
+
+  elements.householdSelect.innerHTML = households
+    .map(household => `<option value="${escapeHtml(household.id)}">${escapeHtml(household.name)}</option>`)
+    .join("");
+  elements.householdSelect.value = activeHousehold?.id || "";
 }
 
 export function renderItems(items, filteredItems) {

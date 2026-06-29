@@ -1,10 +1,12 @@
 import {
   deleteCloudItem,
   ensureDefaultHousehold,
+  isActiveHouseholdMember,
   loadCloudLocations,
   loadItems,
   loadCloudItems,
   loadLocations,
+  loadUserHouseholds,
   normalizeItem,
   normalizeLocation,
   replaceCloudItems,
@@ -25,6 +27,11 @@ let activeHouseholdPromise = null;
 let activeUnsubscribe = null;
 let cachedItems = loadItems();
 let cachedLocations = loadLocations();
+let cachedHouseholds = [];
+
+function getActiveHouseholdStorageKey(userId) {
+  return `wheresMyStuff.activeHousehold.${userId}`;
+}
 
 function hasAuthenticatedUser() {
   return Boolean(activeUser?.uid);
@@ -63,7 +70,7 @@ async function ensureActiveHousehold() {
   if (activeHouseholdId) return activeHouseholdId;
 
   if (!activeHouseholdPromise) {
-    activeHouseholdPromise = ensureDefaultHousehold(activeUser);
+    activeHouseholdPromise = resolveActiveHousehold();
   }
 
   try {
@@ -76,6 +83,20 @@ async function ensureActiveHousehold() {
   return activeHouseholdId;
 }
 
+async function resolveActiveHousehold() {
+  const storedHouseholdId = localStorage.getItem(getActiveHouseholdStorageKey(activeUser.uid));
+
+  if (storedHouseholdId && await isActiveHouseholdMember(activeUser.uid, storedHouseholdId)) {
+    cachedHouseholds = await loadUserHouseholds(activeUser.uid);
+    return storedHouseholdId;
+  }
+
+  const defaultHouseholdId = await ensureDefaultHousehold(activeUser);
+  localStorage.setItem(getActiveHouseholdStorageKey(activeUser.uid), defaultHouseholdId);
+  cachedHouseholds = await loadUserHouseholds(activeUser.uid);
+  return defaultHouseholdId;
+}
+
 export function setAuthenticatedUser(user) {
   const nextUserId = user?.uid || null;
   const currentUserId = activeUser?.uid || null;
@@ -84,6 +105,7 @@ export function setAuthenticatedUser(user) {
     unsubscribeItems();
     activeHouseholdId = null;
     activeHouseholdPromise = null;
+    cachedHouseholds = [];
   }
 
   activeUser = user || null;
@@ -92,6 +114,41 @@ export function setAuthenticatedUser(user) {
     cachedItems = loadItems();
     cachedLocations = loadLocations();
   }
+}
+
+export async function getHouseholds() {
+  if (!hasAuthenticatedUser()) {
+    cachedHouseholds = [];
+    return cachedHouseholds;
+  }
+
+  await ensureActiveHousehold();
+  cachedHouseholds = await loadUserHouseholds(activeUser.uid);
+  return cachedHouseholds;
+}
+
+export async function getActiveHousehold() {
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return null;
+
+  if (cachedHouseholds.length === 0) {
+    cachedHouseholds = await loadUserHouseholds(activeUser.uid);
+  }
+
+  return cachedHouseholds.find(household => household.id === householdId) || null;
+}
+
+export async function setActiveHousehold(householdId) {
+  if (!hasAuthenticatedUser()) return null;
+  if (!(await isActiveHouseholdMember(activeUser.uid, householdId))) return getActiveHousehold();
+
+  unsubscribeItems();
+  activeHouseholdId = householdId;
+  activeHouseholdPromise = Promise.resolve(householdId);
+  localStorage.setItem(getActiveHouseholdStorageKey(activeUser.uid), householdId);
+  cachedItems = await loadCloudItems(householdId);
+  cachedLocations = await loadCloudLocations(householdId);
+  return getActiveHousehold();
 }
 
 export function unsubscribeItems() {

@@ -5,12 +5,15 @@ import {
 } from "./firebase.js";
 import {
   deleteItem as deleteStoredItem,
+  getActiveHousehold,
+  getHouseholds,
   exportItems,
   getItems,
   getLocations,
   importItems,
   saveLocation,
   saveItem as saveStoredItem,
+  setActiveHousehold,
   setAuthenticatedUser,
   subscribeItems,
   unsubscribeItems,
@@ -25,11 +28,14 @@ import {
   fillFormForEdit,
   readForm,
   renderItems,
+  renderHouseholdDisplay,
   renderLocationOptions
 } from "./ui.js";
 
 let items = [];
 let locations = [];
+let households = [];
+let activeHousehold = null;
 let currentUser = null;
 let signInInProgress = false;
 
@@ -68,6 +74,7 @@ function render() {
 
   renderItems(items, filtered);
   renderLocationOptions(getLocationSuggestions());
+  renderHouseholdDisplay(households, activeHousehold);
 }
 
 function syncItems(nextItems) {
@@ -162,6 +169,8 @@ function updateAuthDisplay(user, message) {
     elements.authName.textContent = "";
     elements.authEmail.textContent = "";
     elements.authStatus.textContent = "";
+    households = [];
+    activeHousehold = null;
     elements.authPhoto.removeAttribute("src");
     elements.authPhoto.alt = "";
     elements.authPhoto.hidden = true;
@@ -209,6 +218,8 @@ function setupAuth() {
       unsubscribeItems();
       items = await getItems();
       locations = await getLocations();
+      households = [];
+      activeHousehold = null;
       updateAuthDisplay(null);
       render();
       return;
@@ -218,6 +229,8 @@ function setupAuth() {
 
     items = await getItems();
     locations = await getLocations();
+    households = await getHouseholds();
+    activeHousehold = await getActiveHousehold();
     updateAuthDisplay(user);
     render();
     subscribeItems(syncItems);
@@ -233,6 +246,18 @@ elements.cancelEditButton.addEventListener("click", resetForm);
 elements.searchInput.addEventListener("input", render);
 elements.categoryFilter.addEventListener("change", render);
 elements.sortMode.addEventListener("change", render);
+
+elements.householdSelect.addEventListener("change", async () => {
+  const householdId = elements.householdSelect.value;
+  if (!householdId) return;
+
+  activeHousehold = await setActiveHousehold(householdId);
+  households = await getHouseholds();
+  items = await getItems();
+  locations = await getLocations();
+  render();
+  subscribeItems(syncItems);
+});
 
 elements.itemsList.addEventListener("click", async event => {
   const button = event.target.closest("button[data-action]");
@@ -294,6 +319,8 @@ async function initializeApp() {
   setAuthenticatedUser(null);
   items = await getItems();
   locations = await getLocations();
+  households = [];
+  activeHousehold = null;
   render();
   setupAuth();
   registerServiceWorker();
