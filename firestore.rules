@@ -1,0 +1,68 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function householdMemberPath(householdId, userId) {
+      return /databases/$(database)/documents/households/$(householdId)/members/$(userId);
+    }
+
+    function isHouseholdMember(householdId) {
+      return signedIn()
+        && exists(householdMemberPath(householdId, request.auth.uid))
+        && get(householdMemberPath(householdId, request.auth.uid)).data.status == "active";
+    }
+
+    function isCreatingOwnHousehold() {
+      return signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.name is string;
+    }
+
+    function isCreatingOwnOwnerMembership(householdId, userId) {
+      return isSelf(userId)
+        && exists(/databases/$(database)/documents/households/$(householdId))
+        && get(/databases/$(database)/documents/households/$(householdId)).data.ownerId == request.auth.uid
+        && request.resource.data.role == "owner"
+        && request.resource.data.status == "active";
+    }
+
+    match /users/{userId} {
+      allow read, write: if isSelf(userId);
+
+      match /householdMemberships/{householdId} {
+        allow read, write: if isSelf(userId);
+      }
+    }
+
+    match /households/{householdId} {
+      allow create: if isCreatingOwnHousehold();
+      allow read, update, delete: if isHouseholdMember(householdId);
+
+      match /members/{userId} {
+        allow create: if isCreatingOwnOwnerMembership(householdId, userId)
+          || isHouseholdMember(householdId);
+        allow read, update, delete: if isHouseholdMember(householdId);
+      }
+
+      match /items/{itemId} {
+        allow read, write: if isHouseholdMember(householdId);
+      }
+
+      match /locations/{locationId} {
+        allow read, write: if isHouseholdMember(householdId);
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

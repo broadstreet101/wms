@@ -4,24 +4,45 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   setDoc
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-function getUserItemsCollection(userId) {
-  return collection(db, "users", userId, "items");
+function getUserDocument(userId) {
+  return doc(db, "users", userId);
 }
 
-function getUserItemDocument(userId, itemId) {
-  return doc(db, "users", userId, "items", itemId);
+function getUserMembershipsCollection(userId) {
+  return collection(db, "users", userId, "householdMemberships");
 }
 
-function getUserLocationsCollection(userId) {
-  return collection(db, "users", userId, "locations");
+function getUserMembershipDocument(userId, householdId) {
+  return doc(db, "users", userId, "householdMemberships", householdId);
 }
 
-function getUserLocationDocument(userId, locationId) {
-  return doc(db, "users", userId, "locations", locationId);
+function getHouseholdDocument(householdId) {
+  return doc(db, "households", householdId);
+}
+
+function getHouseholdMemberDocument(householdId, userId) {
+  return doc(db, "households", householdId, "members", userId);
+}
+
+function getHouseholdItemsCollection(householdId) {
+  return collection(db, "households", householdId, "items");
+}
+
+function getHouseholdItemDocument(householdId, itemId) {
+  return doc(db, "households", householdId, "items", itemId);
+}
+
+function getHouseholdLocationsCollection(householdId) {
+  return collection(db, "households", householdId, "locations");
+}
+
+function getHouseholdLocationDocument(householdId, locationId) {
+  return doc(db, "households", householdId, "locations", locationId);
 }
 
 export function loadItems() {
@@ -62,8 +83,88 @@ export function saveLocations(locations) {
   localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(locations.map(normalizeLocation)));
 }
 
-export async function loadCloudItems(userId) {
-  const snapshot = await getDocs(getUserItemsCollection(userId));
+export async function ensureDefaultHousehold(user) {
+  const now = new Date().toISOString();
+  const userId = user.uid;
+  const userProfile = {
+    displayName: user.displayName || "",
+    email: user.email || "",
+    photoURL: user.photoURL || "",
+    updatedAt: now
+  };
+
+  const userRef = getUserDocument(userId);
+  const userSnapshot = await getDoc(userRef);
+  const userData = userSnapshot.exists() ? userSnapshot.data() : {};
+
+  await setDoc(
+    userRef,
+    {
+      ...userProfile,
+      createdAt: userData.createdAt || now
+    },
+    { merge: true }
+  );
+
+  if (userData.defaultHouseholdId) {
+    return userData.defaultHouseholdId;
+  }
+
+  const membershipsSnapshot = await getDocs(getUserMembershipsCollection(userId));
+  const activeMembership = membershipsSnapshot.docs
+    .map(documentSnapshot => ({
+      householdId: documentSnapshot.id,
+      ...documentSnapshot.data()
+    }))
+    .find(membership => membership.status !== "removed");
+
+  if (activeMembership?.householdId) {
+    await setDoc(userRef, { defaultHouseholdId: activeMembership.householdId }, { merge: true });
+    return activeMembership.householdId;
+  }
+
+  const householdId = makeId();
+  const household = {
+    id: householdId,
+    name: "My Household",
+    ownerId: userId,
+    createdAt: now,
+    updatedAt: now,
+    archivedAt: null
+  };
+  const member = {
+    userId,
+    displayName: user.displayName || "",
+    email: user.email || "",
+    photoURL: user.photoURL || "",
+    role: "owner",
+    status: "active",
+    invitedBy: userId,
+    joinedAt: now,
+    updatedAt: now
+  };
+  const membership = {
+    householdId,
+    role: "owner",
+    status: "active",
+    joinedAt: now,
+    lastOpenedAt: now
+  };
+
+  await setDoc(getHouseholdDocument(householdId), household);
+
+  await Promise.all([
+    setDoc(getHouseholdMemberDocument(householdId, userId), member),
+    setDoc(getUserMembershipDocument(userId, householdId), membership)
+  ]);
+
+  await setDoc(userRef, { defaultHouseholdId: householdId }, { merge: true });
+
+  return householdId;
+}
+
+export async function loadCloudItems(householdId) {
+  const snapshot = await getDocs(getHouseholdItemsCollection(householdId));
   const items = snapshot.docs.map(documentSnapshot =>
     normalizeItem({
       id: documentSnapshot.id,
@@ -74,29 +175,29 @@ export async function loadCloudItems(userId) {
   return items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export async function saveCloudItem(userId, item) {
+export async function saveCloudItem(householdId, item) {
   const normalized = normalizeItem(item);
-  await setDoc(getUserItemDocument(userId, normalized.id), normalized);
+  await setDoc(getHouseholdItemDocument(householdId, normalized.id), normalized);
 }
 
-export async function deleteCloudItem(userId, itemId) {
-  await deleteDoc(getUserItemDocument(userId, itemId));
+export async function deleteCloudItem(householdId, itemId) {
+  await deleteDoc(getHouseholdItemDocument(householdId, itemId));
 }
 
-export async function replaceCloudItems(userId, items) {
-  const existingItems = await loadCloudItems(userId);
+export async function replaceCloudItems(householdId, items) {
+  const existingItems = await loadCloudItems(householdId);
 
   await Promise.all(
-    existingItems.map(item => deleteCloudItem(userId, item.id))
+    existingItems.map(item => deleteCloudItem(householdId, item.id))
   );
 
   await Promise.all(
-    items.map(item => saveCloudItem(userId, item))
+    items.map(item => saveCloudItem(householdId, item))
   );
 }
 
-export async function loadCloudLocations(userId) {
-  const snapshot = await getDocs(getUserLocationsCollection(userId));
+export async function loadCloudLocations(householdId) {
+  const snapshot = await getDocs(getHouseholdLocationsCollection(householdId));
   const locations = snapshot.docs.map(documentSnapshot =>
     normalizeLocation({
       id: documentSnapshot.id,
@@ -107,20 +208,20 @@ export async function loadCloudLocations(userId) {
   return locations.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function saveCloudLocation(userId, location) {
+export async function saveCloudLocation(householdId, location) {
   const normalized = normalizeLocation(location);
-  await setDoc(getUserLocationDocument(userId, normalized.id), normalized);
+  await setDoc(getHouseholdLocationDocument(householdId, normalized.id), normalized);
 }
 
-export async function migrateLocalItemsToCloudIfEmpty(userId, localItems) {
-  const cloudItems = await loadCloudItems(userId);
+export async function migrateLocalItemsToCloudIfEmpty(householdId, localItems) {
+  const cloudItems = await loadCloudItems(householdId);
 
   if (cloudItems.length > 0 || localItems.length === 0) {
     return cloudItems;
   }
 
   await Promise.all(
-    localItems.map(item => saveCloudItem(userId, item))
+    localItems.map(item => saveCloudItem(householdId, item))
   );
 
   return localItems.map(normalizeItem);
