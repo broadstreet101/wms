@@ -1,11 +1,16 @@
 import {
   deleteCloudItem,
+  loadCloudLocations,
   loadItems,
   loadCloudItems,
+  loadLocations,
   normalizeItem,
+  normalizeLocation,
   replaceCloudItems,
   saveCloudItem,
-  saveItems
+  saveCloudLocation,
+  saveItems,
+  saveLocations
 } from "./storage.js";
 import { db } from "./firebase.js";
 import {
@@ -16,6 +21,7 @@ import {
 let activeUser = null;
 let activeUnsubscribe = null;
 let cachedItems = loadItems();
+let cachedLocations = loadLocations();
 
 function isUsingFirestore() {
   return Boolean(activeUser?.uid);
@@ -23,6 +29,11 @@ function isUsingFirestore() {
 
 function getUserItemsCollection(userId) {
   return collection(db, "users", userId, "items");
+}
+
+function findMatchingLocation(locations, name) {
+  const normalizedName = name.trim().toLocaleLowerCase();
+  return locations.find(location => location.name.toLocaleLowerCase() === normalizedName);
 }
 
 function normalizeSnapshot(snapshot) {
@@ -52,6 +63,7 @@ export function setAuthenticatedUser(user) {
 
   if (!activeUser) {
     cachedItems = loadItems();
+    cachedLocations = loadLocations();
   }
 }
 
@@ -97,6 +109,49 @@ export async function getItems() {
   }
 
   return cachedItems;
+}
+
+export async function getLocations() {
+  if (!isUsingFirestore()) {
+    cachedLocations = loadLocations();
+    return cachedLocations;
+  }
+
+  try {
+    cachedLocations = await loadCloudLocations(activeUser.uid);
+  } catch (error) {
+    warnFirestoreUnavailable("locations load", error);
+  }
+
+  return cachedLocations;
+}
+
+export async function saveLocation(location) {
+  const locationName = (location.name || "").trim();
+  if (!locationName) return null;
+
+  const existingLocation = findMatchingLocation(cachedLocations, locationName);
+  if (existingLocation) return existingLocation;
+
+  const savedLocation = normalizeLocation({
+    ...location,
+    name: locationName
+  });
+
+  cachedLocations = [...cachedLocations, savedLocation].sort((a, b) => a.name.localeCompare(b.name));
+
+  if (!isUsingFirestore()) {
+    saveLocations(cachedLocations);
+    return savedLocation;
+  }
+
+  try {
+    await saveCloudLocation(activeUser.uid, savedLocation);
+  } catch (error) {
+    warnFirestoreUnavailable("location save", error);
+  }
+
+  return savedLocation;
 }
 
 export async function saveItem(item) {

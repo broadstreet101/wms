@@ -6,6 +6,7 @@ export const elements = {
   itemId: document.getElementById("itemId"),
   itemName: document.getElementById("itemName"),
   itemLocation: document.getElementById("itemLocation"),
+  locationOptions: document.getElementById("locationOptions"),
   itemCategory: document.getElementById("itemCategory"),
   itemRoom: document.getElementById("itemRoom"),
   itemNotes: document.getElementById("itemNotes"),
@@ -78,6 +79,15 @@ export function readForm() {
     room: elements.itemRoom.value.trim(),
     notes: elements.itemNotes.value.trim()
   };
+}
+
+export function renderLocationOptions(locations) {
+  elements.locationOptions.innerHTML = locations
+    .map(location => {
+      const label = location.room ? `${location.name} - ${location.room}` : location.name;
+      return `<option value="${escapeHtml(location.name)}" label="${escapeHtml(label)}"></option>`;
+    })
+    .join("");
 }
 
 export function renderItems(items, filteredItems) {

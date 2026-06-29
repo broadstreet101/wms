@@ -1,4 +1,4 @@
-import { STORAGE_KEY, LEGACY_STORAGE_KEYS } from "./config.js";
+import { STORAGE_KEY, LOCATION_STORAGE_KEY, LEGACY_STORAGE_KEYS } from "./config.js";
 import { db } from "./firebase.js";
 import {
   collection,
@@ -14,6 +14,14 @@ function getUserItemsCollection(userId) {
 
 function getUserItemDocument(userId, itemId) {
   return doc(db, "users", userId, "items", itemId);
+}
+
+function getUserLocationsCollection(userId) {
+  return collection(db, "users", userId, "locations");
+}
+
+function getUserLocationDocument(userId, locationId) {
+  return doc(db, "users", userId, "locations", locationId);
 }
 
 export function loadItems() {
@@ -38,6 +46,20 @@ export function loadItems() {
 
 export function saveItems(items) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items.map(normalizeItem)));
+}
+
+export function loadLocations() {
+  try {
+    const current = JSON.parse(localStorage.getItem(LOCATION_STORAGE_KEY));
+    if (Array.isArray(current)) return current.map(normalizeLocation);
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocations(locations) {
+  localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(locations.map(normalizeLocation)));
 }
 
 export async function loadCloudItems(userId) {
@@ -73,6 +95,23 @@ export async function replaceCloudItems(userId, items) {
   );
 }
 
+export async function loadCloudLocations(userId) {
+  const snapshot = await getDocs(getUserLocationsCollection(userId));
+  const locations = snapshot.docs.map(documentSnapshot =>
+    normalizeLocation({
+      id: documentSnapshot.id,
+      ...documentSnapshot.data()
+    })
+  );
+
+  return locations.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function saveCloudLocation(userId, location) {
+  const normalized = normalizeLocation(location);
+  await setDoc(getUserLocationDocument(userId, normalized.id), normalized);
+}
+
 export async function migrateLocalItemsToCloudIfEmpty(userId, localItems) {
   const cloudItems = await loadCloudItems(userId);
 
@@ -99,6 +138,19 @@ export function normalizeItem(item) {
     notes: item.notes || "",
     createdAt: item.createdAt || now,
     updatedAt: item.updatedAt || now
+  };
+}
+
+export function normalizeLocation(location) {
+  const now = new Date().toISOString();
+
+  return {
+    id: location.id || makeId(),
+    name: (location.name || "").trim(),
+    room: (location.room || "").trim(),
+    notes: (location.notes || "").trim(),
+    createdAt: location.createdAt || now,
+    updatedAt: location.updatedAt || now
   };
 }
 

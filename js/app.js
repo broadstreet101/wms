@@ -7,7 +7,9 @@ import {
   deleteItem as deleteStoredItem,
   exportItems,
   getItems,
+  getLocations,
   importItems,
+  saveLocation,
   saveItem as saveStoredItem,
   setAuthenticatedUser,
   subscribeItems,
@@ -22,12 +24,39 @@ import {
   resetForm,
   fillFormForEdit,
   readForm,
-  renderItems
+  renderItems,
+  renderLocationOptions
 } from "./ui.js";
 
 let items = [];
+let locations = [];
 let currentUser = null;
 let signInInProgress = false;
+
+function getLocationSuggestions() {
+  const suggestions = new Map();
+
+  locations.forEach(location => {
+    if (location.name) suggestions.set(location.name.toLocaleLowerCase(), location);
+  });
+
+  items.forEach(item => {
+    const name = (item.location || "").trim();
+    if (!name) return;
+
+    const key = name.toLocaleLowerCase();
+    if (!suggestions.has(key)) {
+      suggestions.set(key, {
+        id: key,
+        name,
+        room: item.room || "",
+        notes: ""
+      });
+    }
+  });
+
+  return [...suggestions.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
 
 function render() {
   const filtered = getFilteredItems(
@@ -38,6 +67,7 @@ function render() {
   );
 
   renderItems(items, filtered);
+  renderLocationOptions(getLocationSuggestions());
 }
 
 function syncItems(nextItems) {
@@ -48,6 +78,15 @@ function syncItems(nextItems) {
 async function upsertItem(formData) {
   const now = new Date().toISOString();
   let itemToSave;
+
+  if (formData.location) {
+    await saveLocation({
+      name: formData.location,
+      room: formData.room,
+      updatedAt: now
+    });
+    locations = await getLocations();
+  }
 
   if (formData.id) {
     itemToSave = await updateStoredItem({
@@ -169,6 +208,7 @@ function setupAuth() {
     if (!user) {
       unsubscribeItems();
       items = await getItems();
+      locations = await getLocations();
       updateAuthDisplay(null);
       render();
       return;
@@ -177,6 +217,7 @@ function setupAuth() {
     updateAuthDisplay(user, "Loading cloud items...");
 
     items = await getItems();
+    locations = await getLocations();
     updateAuthDisplay(user);
     render();
     subscribeItems(syncItems);
@@ -221,6 +262,7 @@ elements.importFile.addEventListener("change", async event => {
     if (!confirmed) return;
 
     items = await importItems(importedItems);
+    locations = await getLocations();
     resetForm();
     render();
     alert("Backup imported successfully.");
@@ -241,6 +283,7 @@ elements.clearButton.addEventListener("click", async () => {
   if (!confirmed) return;
 
   items = await importItems([]);
+  locations = await getLocations();
   resetForm();
   render();
 });
@@ -250,6 +293,7 @@ async function initializeApp() {
   resetForm();
   setAuthenticatedUser(null);
   items = await getItems();
+  locations = await getLocations();
   render();
   setupAuth();
   registerServiceWorker();
