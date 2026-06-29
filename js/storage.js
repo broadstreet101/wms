@@ -45,6 +45,37 @@ function getHouseholdLocationDocument(householdId, locationId) {
   return doc(db, "households", householdId, "locations", locationId);
 }
 
+function makeOwnerMember(user, now) {
+  return {
+    userId: user.uid,
+    displayName: user.displayName || "",
+    email: user.email || "",
+    photoURL: user.photoURL || "",
+    role: "owner",
+    status: "active",
+    invitedBy: user.uid,
+    joinedAt: now,
+    updatedAt: now
+  };
+}
+
+function makeOwnerMembership(householdId, now) {
+  return {
+    householdId,
+    role: "owner",
+    status: "active",
+    joinedAt: now,
+    lastOpenedAt: now
+  };
+}
+
+async function ensureOwnerMembershipDocs(user, householdId, now) {
+  await Promise.all([
+    setDoc(getHouseholdMemberDocument(householdId, user.uid), makeOwnerMember(user, now), { merge: true }),
+    setDoc(getUserMembershipDocument(user.uid, householdId), makeOwnerMembership(householdId, now), { merge: true })
+  ]);
+}
+
 export function loadItems() {
   try {
     const current = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -107,7 +138,24 @@ export async function ensureDefaultHousehold(user) {
   );
 
   if (userData.defaultHouseholdId) {
-    return userData.defaultHouseholdId;
+    const defaultMembershipSnapshot = await getDoc(
+      getUserMembershipDocument(userId, userData.defaultHouseholdId)
+    );
+
+    if (defaultMembershipSnapshot.exists() && defaultMembershipSnapshot.data().status !== "removed") {
+      if (defaultMembershipSnapshot.data().role === "owner") {
+        await ensureOwnerMembershipDocs(user, userData.defaultHouseholdId, now);
+      }
+
+      return userData.defaultHouseholdId;
+    }
+  }
+
+  if (userData.defaultHouseholdId) {
+    console.warn(
+      "Default household membership is missing. Creating a new default household.",
+      userData.defaultHouseholdId
+    );
   }
 
   const membershipsSnapshot = await getDocs(getUserMembershipsCollection(userId));
@@ -119,6 +167,10 @@ export async function ensureDefaultHousehold(user) {
     .find(membership => membership.status !== "removed");
 
   if (activeMembership?.householdId) {
+    if (activeMembership.role === "owner") {
+      await ensureOwnerMembershipDocs(user, activeMembership.householdId, now);
+    }
+
     await setDoc(userRef, { defaultHouseholdId: activeMembership.householdId }, { merge: true });
     return activeMembership.householdId;
   }
@@ -132,31 +184,8 @@ export async function ensureDefaultHousehold(user) {
     updatedAt: now,
     archivedAt: null
   };
-  const member = {
-    userId,
-    displayName: user.displayName || "",
-    email: user.email || "",
-    photoURL: user.photoURL || "",
-    role: "owner",
-    status: "active",
-    invitedBy: userId,
-    joinedAt: now,
-    updatedAt: now
-  };
-  const membership = {
-    householdId,
-    role: "owner",
-    status: "active",
-    joinedAt: now,
-    lastOpenedAt: now
-  };
-
   await setDoc(getHouseholdDocument(householdId), household);
-
-  await Promise.all([
-    setDoc(getHouseholdMemberDocument(householdId, userId), member),
-    setDoc(getUserMembershipDocument(userId, householdId), membership)
-  ]);
+  await ensureOwnerMembershipDocs(user, householdId, now);
 
   await setDoc(userRef, { defaultHouseholdId: householdId }, { merge: true });
 
