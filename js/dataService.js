@@ -3,6 +3,7 @@ import {
   ensureDefaultHousehold,
   isActiveHouseholdMember,
   loadCloudLocations,
+  loadHouseholdMembers,
   loadItems,
   loadCloudItems,
   loadLocations,
@@ -25,9 +26,12 @@ let activeUser = null;
 let activeHouseholdId = null;
 let activeHouseholdPromise = null;
 let activeUnsubscribe = null;
+let activeMembersUnsubscribe = null;
+let activeMembersCallback = null;
 let cachedItems = loadItems();
 let cachedLocations = loadLocations();
 let cachedHouseholds = [];
+let cachedMembers = [];
 
 function getActiveHouseholdStorageKey(userId) {
   return `wheresMyStuff.activeHousehold.${userId}`;
@@ -43,6 +47,10 @@ function isUsingFirestore() {
 
 function getHouseholdItemsCollection(householdId) {
   return collection(db, "households", householdId, "items");
+}
+
+function getHouseholdMembersCollection(householdId) {
+  return collection(db, "households", householdId, "members");
 }
 
 function findMatchingLocation(locations, name) {
@@ -63,6 +71,16 @@ function normalizeSnapshot(snapshot) {
 
 function warnFirestoreUnavailable(action, error) {
   console.warn(`Firestore ${action} unavailable. Continuing with current in-memory items.`, error);
+}
+
+function normalizeMembersSnapshot(snapshot) {
+  return snapshot.docs
+    .map(documentSnapshot => ({
+      userId: documentSnapshot.id,
+      ...documentSnapshot.data()
+    }))
+    .filter(member => member.status !== "removed")
+    .sort((a, b) => (a.displayName || a.email || "").localeCompare(b.displayName || b.email || ""));
 }
 
 async function ensureActiveHousehold() {
@@ -103,9 +121,12 @@ export function setAuthenticatedUser(user) {
 
   if (nextUserId !== currentUserId) {
     unsubscribeItems();
+    unsubscribeMembers();
+    activeMembersCallback = null;
     activeHouseholdId = null;
     activeHouseholdPromise = null;
     cachedHouseholds = [];
+    cachedMembers = [];
   }
 
   activeUser = user || null;
@@ -148,6 +169,12 @@ export async function setActiveHousehold(householdId) {
   localStorage.setItem(getActiveHouseholdStorageKey(activeUser.uid), householdId);
   cachedItems = await loadCloudItems(householdId);
   cachedLocations = await loadCloudLocations(householdId);
+  cachedMembers = await loadHouseholdMembers(householdId);
+
+  if (activeMembersCallback) {
+    subscribeMembers(activeMembersCallback);
+  }
+
   return getActiveHousehold();
 }
 
@@ -178,6 +205,54 @@ export function subscribeItems(callback) {
   );
 
   return unsubscribeItems;
+}
+
+export function unsubscribeMembers() {
+  if (!activeMembersUnsubscribe) return;
+
+  const unsubscribe = activeMembersUnsubscribe;
+  activeMembersUnsubscribe = null;
+  unsubscribe();
+}
+
+export function subscribeMembers(callback) {
+  unsubscribeMembers();
+  activeMembersCallback = callback;
+
+  if (!isUsingFirestore()) {
+    return unsubscribeMembers;
+  }
+
+  activeMembersUnsubscribe = onSnapshot(
+    getHouseholdMembersCollection(activeHouseholdId),
+    snapshot => {
+      cachedMembers = normalizeMembersSnapshot(snapshot);
+      callback(cachedMembers);
+    },
+    error => {
+      warnFirestoreUnavailable("members listener", error);
+    }
+  );
+
+  return unsubscribeMembers;
+}
+
+export async function getMembers() {
+  if (!hasAuthenticatedUser()) {
+    cachedMembers = [];
+    return cachedMembers;
+  }
+
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return cachedMembers;
+
+  try {
+    cachedMembers = await loadHouseholdMembers(householdId);
+  } catch (error) {
+    warnFirestoreUnavailable("members load", error);
+  }
+
+  return cachedMembers;
 }
 
 export async function getItems() {

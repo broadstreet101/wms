@@ -10,13 +10,16 @@ import {
   exportItems,
   getItems,
   getLocations,
+  getMembers,
   importItems,
   saveLocation,
   saveItem as saveStoredItem,
   setActiveHousehold,
   setAuthenticatedUser,
   subscribeItems,
+  subscribeMembers,
   unsubscribeItems,
+  unsubscribeMembers,
   updateItem as updateStoredItem
 } from "./dataService.js";
 import { getFilteredItems } from "./search.js";
@@ -29,6 +32,7 @@ import {
   readForm,
   renderItems,
   renderHouseholdDisplay,
+  renderMembers,
   renderLocationOptions
 } from "./ui.js";
 
@@ -36,6 +40,7 @@ let items = [];
 let locations = [];
 let households = [];
 let activeHousehold = null;
+let members = [];
 let currentUser = null;
 let signInInProgress = false;
 
@@ -75,10 +80,16 @@ function render() {
   renderItems(items, filtered);
   renderLocationOptions(getLocationSuggestions());
   renderHouseholdDisplay(households, activeHousehold);
+  renderMembers(members);
 }
 
 function syncItems(nextItems) {
   items = nextItems;
+  render();
+}
+
+function syncMembers(nextMembers) {
+  members = nextMembers;
   render();
 }
 
@@ -171,6 +182,7 @@ function updateAuthDisplay(user, message) {
     elements.authStatus.textContent = "";
     households = [];
     activeHousehold = null;
+    members = [];
     elements.authPhoto.removeAttribute("src");
     elements.authPhoto.alt = "";
     elements.authPhoto.hidden = true;
@@ -216,10 +228,12 @@ function setupAuth() {
 
     if (!user) {
       unsubscribeItems();
+      unsubscribeMembers();
       items = await getItems();
       locations = await getLocations();
       households = [];
       activeHousehold = null;
+      members = [];
       updateAuthDisplay(null);
       render();
       return;
@@ -231,9 +245,11 @@ function setupAuth() {
     locations = await getLocations();
     households = await getHouseholds();
     activeHousehold = await getActiveHousehold();
+    members = await getMembers();
     updateAuthDisplay(user);
     render();
     subscribeItems(syncItems);
+    subscribeMembers(syncMembers);
   });
 }
 
@@ -255,8 +271,10 @@ elements.householdSelect.addEventListener("change", async () => {
   households = await getHouseholds();
   items = await getItems();
   locations = await getLocations();
+  members = await getMembers();
   render();
   subscribeItems(syncItems);
+  subscribeMembers(syncMembers);
 });
 
 elements.itemsList.addEventListener("click", async event => {
@@ -321,6 +339,7 @@ async function initializeApp() {
   locations = await getLocations();
   households = [];
   activeHousehold = null;
+  members = [];
   render();
   setupAuth();
   registerServiceWorker();

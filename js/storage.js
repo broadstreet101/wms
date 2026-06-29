@@ -29,6 +29,10 @@ function getHouseholdMemberDocument(householdId, userId) {
   return doc(db, "households", householdId, "members", userId);
 }
 
+function getHouseholdMembersCollection(householdId) {
+  return collection(db, "households", householdId, "members");
+}
+
 function getHouseholdItemsCollection(householdId) {
   return collection(db, "households", householdId, "items");
 }
@@ -139,6 +143,18 @@ export async function loadUserHouseholds(userId) {
   return households
     .filter(Boolean)
     .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+}
+
+export async function loadHouseholdMembers(householdId) {
+  const snapshot = await getDocs(getHouseholdMembersCollection(householdId));
+
+  return snapshot.docs
+    .map(documentSnapshot => ({
+      userId: documentSnapshot.id,
+      ...documentSnapshot.data()
+    }))
+    .filter(member => member.status !== "removed")
+    .sort((a, b) => (a.displayName || a.email || "").localeCompare(b.displayName || b.email || ""));
 }
 
 export async function isActiveHouseholdMember(userId, householdId) {

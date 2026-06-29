@@ -127,6 +127,71 @@ header p {
   font-size: 0.8rem;
 }
 
+.members-panel {
+  width: min(100%, 520px);
+  margin: 0.7rem auto 0;
+  padding: 0.75rem;
+  border: 1px solid rgba(216, 224, 234, 0.85);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  text-align: left;
+}
+
+.members-panel h2 {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+}
+
+.members-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.member {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.member-photo {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--soft-blue);
+}
+
+.member-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #1e3a8a;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.member-details {
+  display: grid;
+  min-width: 0;
+}
+
+.member-details strong,
+.member-details span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-details strong {
+  font-size: 0.9rem;
+}
+
+.member-details span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 @media (max-width: 520px) {
   .auth-profile {
     grid-template-columns: auto minmax(0, 1fr);

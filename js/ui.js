@@ -31,7 +31,9 @@ export const elements = {
   signOutButton: document.getElementById("signOutButton"),
   authStatus: document.getElementById("authStatus"),
   householdName: document.getElementById("householdName"),
-  householdSelect: document.getElementById("householdSelect")
+  householdSelect: document.getElementById("householdSelect"),
+  membersPanel: document.getElementById("membersPanel"),
+  membersList: document.getElementById("membersList")
 };
 
 export function populateCategoryControls() {
@@ -109,6 +111,50 @@ export function renderHouseholdDisplay(households, activeHousehold) {
     .map(household => `<option value="${escapeHtml(household.id)}">${escapeHtml(household.name)}</option>`)
     .join("");
   elements.householdSelect.value = activeHousehold?.id || "";
+}
+
+function getRoleLabel(role) {
+  if (role === "owner") return "Owner";
+  if (role === "admin") return "Admin";
+  return "Member";
+}
+
+function getInitials(member) {
+  const name = member.displayName || member.email || "?";
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0].toUpperCase())
+    .join("");
+}
+
+export function renderMembers(members) {
+  elements.membersPanel.hidden = members.length === 0;
+
+  if (members.length === 0) {
+    elements.membersList.innerHTML = "";
+    return;
+  }
+
+  elements.membersList.innerHTML = members
+    .map(member => {
+      const displayName = member.displayName || member.email || "Household member";
+      const avatar = member.photoURL
+        ? `<img class="member-photo" src="${escapeHtml(member.photoURL)}" alt="${escapeHtml(displayName)} profile photo" referrerpolicy="no-referrer" />`
+        : `<span class="member-photo member-initials">${escapeHtml(getInitials(member))}</span>`;
+
+      return `
+        <div class="member">
+          ${avatar}
+          <div class="member-details">
+            <strong>${escapeHtml(displayName)}</strong>
+            <span>${escapeHtml(getRoleLabel(member.role))}</span>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
 }
 
 export function renderItems(items, filteredItems) {
