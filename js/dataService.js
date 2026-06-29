@@ -1,5 +1,6 @@
 import {
   deleteCloudItem,
+  ensureDefaultHousehold,
   loadCloudLocations,
   loadItems,
   loadCloudItems,
@@ -19,16 +20,22 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 let activeUser = null;
+let activeHouseholdId = null;
+let activeHouseholdPromise = null;
 let activeUnsubscribe = null;
 let cachedItems = loadItems();
 let cachedLocations = loadLocations();
 
-function isUsingFirestore() {
+function hasAuthenticatedUser() {
   return Boolean(activeUser?.uid);
 }
 
-function getUserItemsCollection(userId) {
-  return collection(db, "users", userId, "items");
+function isUsingFirestore() {
+  return Boolean(activeHouseholdId);
+}
+
+function getHouseholdItemsCollection(householdId) {
+  return collection(db, "households", householdId, "items");
 }
 
 function findMatchingLocation(locations, name) {
@@ -51,12 +58,32 @@ function warnFirestoreUnavailable(action, error) {
   console.warn(`Firestore ${action} unavailable. Continuing with current in-memory items.`, error);
 }
 
+async function ensureActiveHousehold() {
+  if (!hasAuthenticatedUser()) return null;
+  if (activeHouseholdId) return activeHouseholdId;
+
+  if (!activeHouseholdPromise) {
+    activeHouseholdPromise = ensureDefaultHousehold(activeUser);
+  }
+
+  try {
+    activeHouseholdId = await activeHouseholdPromise;
+  } catch (error) {
+    warnFirestoreUnavailable("household setup", error);
+    activeHouseholdPromise = null;
+  }
+
+  return activeHouseholdId;
+}
+
 export function setAuthenticatedUser(user) {
   const nextUserId = user?.uid || null;
   const currentUserId = activeUser?.uid || null;
 
   if (nextUserId !== currentUserId) {
     unsubscribeItems();
+    activeHouseholdId = null;
+    activeHouseholdPromise = null;
   }
 
   activeUser = user || null;
@@ -83,7 +110,7 @@ export function subscribeItems(callback) {
   }
 
   activeUnsubscribe = onSnapshot(
-    getUserItemsCollection(activeUser.uid),
+    getHouseholdItemsCollection(activeHouseholdId),
     snapshot => {
       cachedItems = normalizeSnapshot(snapshot);
       callback(cachedItems);
@@ -97,13 +124,16 @@ export function subscribeItems(callback) {
 }
 
 export async function getItems() {
-  if (!isUsingFirestore()) {
+  if (!hasAuthenticatedUser()) {
     cachedItems = loadItems();
     return cachedItems;
   }
 
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return cachedItems;
+
   try {
-    cachedItems = await loadCloudItems(activeUser.uid);
+    cachedItems = await loadCloudItems(householdId);
   } catch (error) {
     warnFirestoreUnavailable("load", error);
   }
@@ -112,13 +142,16 @@ export async function getItems() {
 }
 
 export async function getLocations() {
-  if (!isUsingFirestore()) {
+  if (!hasAuthenticatedUser()) {
     cachedLocations = loadLocations();
     return cachedLocations;
   }
 
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return cachedLocations;
+
   try {
-    cachedLocations = await loadCloudLocations(activeUser.uid);
+    cachedLocations = await loadCloudLocations(householdId);
   } catch (error) {
     warnFirestoreUnavailable("locations load", error);
   }
@@ -140,13 +173,16 @@ export async function saveLocation(location) {
 
   cachedLocations = [...cachedLocations, savedLocation].sort((a, b) => a.name.localeCompare(b.name));
 
-  if (!isUsingFirestore()) {
+  if (!hasAuthenticatedUser()) {
     saveLocations(cachedLocations);
     return savedLocation;
   }
 
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return savedLocation;
+
   try {
-    await saveCloudLocation(activeUser.uid, savedLocation);
+    await saveCloudLocation(householdId, savedLocation);
   } catch (error) {
     warnFirestoreUnavailable("location save", error);
   }
@@ -158,13 +194,16 @@ export async function saveItem(item) {
   const savedItem = normalizeItem(item);
   cachedItems = [...cachedItems, savedItem];
 
-  if (!isUsingFirestore()) {
+  if (!hasAuthenticatedUser()) {
     saveItems(cachedItems);
     return savedItem;
   }
 
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return savedItem;
+
   try {
-    await saveCloudItem(activeUser.uid, savedItem);
+    await saveCloudItem(householdId, savedItem);
   } catch (error) {
     warnFirestoreUnavailable("save", error);
   }
@@ -190,13 +229,16 @@ export async function updateItem(item) {
 
   if (!updatedItem) return null;
 
-  if (!isUsingFirestore()) {
+  if (!hasAuthenticatedUser()) {
     saveItems(cachedItems);
     return updatedItem;
   }
 
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return updatedItem;
+
   try {
-    await saveCloudItem(activeUser.uid, updatedItem);
+    await saveCloudItem(householdId, updatedItem);
   } catch (error) {
     warnFirestoreUnavailable("update", error);
   }
@@ -207,13 +249,16 @@ export async function updateItem(item) {
 export async function deleteItem(id) {
   cachedItems = cachedItems.filter(item => item.id !== id);
 
-  if (!isUsingFirestore()) {
+  if (!hasAuthenticatedUser()) {
     saveItems(cachedItems);
     return cachedItems;
   }
 
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return cachedItems;
+
   try {
-    await deleteCloudItem(activeUser.uid, id);
+    await deleteCloudItem(householdId, id);
   } catch (error) {
     warnFirestoreUnavailable("delete", error);
   }
@@ -228,13 +273,16 @@ export async function importItems(data) {
         .filter(item => item.name && item.location)
     : [];
 
-  if (!isUsingFirestore()) {
+  if (!hasAuthenticatedUser()) {
     saveItems(cachedItems);
     return cachedItems;
   }
 
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return cachedItems;
+
   try {
-    await replaceCloudItems(activeUser.uid, cachedItems);
+    await replaceCloudItems(householdId, cachedItems);
   } catch (error) {
     warnFirestoreUnavailable("replace", error);
   }
