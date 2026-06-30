@@ -59,6 +59,10 @@ service cloud.firestore {
       match /locations/{locationId} {
         allow read, write: if isHouseholdMember(householdId);
       }
+
+      match /invitations/{invitationId} {
+        allow read, write: if isHouseholdMember(householdId);
+      }
     }
 
     match /{document=**} {

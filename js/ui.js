@@ -33,7 +33,10 @@ export const elements = {
   householdName: document.getElementById("householdName"),
   householdSelect: document.getElementById("householdSelect"),
   membersPanel: document.getElementById("membersPanel"),
-  membersList: document.getElementById("membersList")
+  membersList: document.getElementById("membersList"),
+  invitationsPanel: document.getElementById("invitationsPanel"),
+  invitationsList: document.getElementById("invitationsList"),
+  testInvitationButton: document.getElementById("testInvitationButton")
 };
 
 export function populateCategoryControls() {
@@ -154,6 +157,32 @@ export function renderMembers(members) {
         </div>
       `;
     })
+    .join("");
+}
+
+export function renderInvitations(invitations, isSignedIn) {
+  elements.invitationsPanel.hidden = !isSignedIn;
+  elements.testInvitationButton.hidden = !isSignedIn;
+
+  if (!isSignedIn) {
+    elements.invitationsList.innerHTML = "";
+    return;
+  }
+
+  if (invitations.length === 0) {
+    elements.invitationsList.innerHTML = `<div class="empty-inline">No pending invitations.</div>`;
+    return;
+  }
+
+  elements.invitationsList.innerHTML = invitations
+    .map(invitation => `
+      <div class="invitation">
+        <div class="invitation-details">
+          <strong>${escapeHtml(invitation.email)}</strong>
+          <span>${escapeHtml(getRoleLabel(invitation.role))} - ${escapeHtml(invitation.status)}</span>
+        </div>
+      </div>
+    `)
     .join("");
 }
 

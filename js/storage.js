@@ -33,6 +33,14 @@ function getHouseholdMembersCollection(householdId) {
   return collection(db, "households", householdId, "members");
 }
 
+function getHouseholdInvitationsCollection(householdId) {
+  return collection(db, "households", householdId, "invitations");
+}
+
+function getHouseholdInvitationDocument(householdId, invitationId) {
+  return doc(db, "households", householdId, "invitations", invitationId);
+}
+
 function getHouseholdItemsCollection(householdId) {
   return collection(db, "households", householdId, "items");
 }
@@ -155,6 +163,30 @@ export async function loadHouseholdMembers(householdId) {
     }))
     .filter(member => member.status !== "removed")
     .sort((a, b) => (a.displayName || a.email || "").localeCompare(b.displayName || b.email || ""));
+}
+
+export async function loadHouseholdInvitations(householdId) {
+  const snapshot = await getDocs(getHouseholdInvitationsCollection(householdId));
+
+  return snapshot.docs
+    .map(documentSnapshot =>
+      normalizeInvitation({
+        id: documentSnapshot.id,
+        ...documentSnapshot.data()
+      })
+    )
+    .filter(invitation => invitation.status === "pending")
+    .sort((a, b) => b.invitedAt.localeCompare(a.invitedAt));
+}
+
+export async function saveHouseholdInvitation(householdId, invitation) {
+  const normalized = normalizeInvitation({
+    ...invitation,
+    householdId
+  });
+
+  await setDoc(getHouseholdInvitationDocument(householdId, normalized.id), normalized);
+  return normalized;
 }
 
 export async function isActiveHouseholdMember(userId, householdId) {
@@ -331,6 +363,27 @@ export function normalizeLocation(location) {
     notes: (location.notes || "").trim(),
     createdAt: location.createdAt || now,
     updatedAt: location.updatedAt || now
+  };
+}
+
+export function normalizeInvitation(invitation) {
+  const now = new Date().toISOString();
+  const email = (invitation.email || "").trim();
+
+  return {
+    id: invitation.id || makeId(),
+    householdId: invitation.householdId || "",
+    householdName: invitation.householdName || "",
+    email,
+    normalizedEmail: (invitation.normalizedEmail || email).trim().toLocaleLowerCase(),
+    role: invitation.role || "member",
+    status: invitation.status || "pending",
+    invitedBy: invitation.invitedBy || "",
+    invitedByName: invitation.invitedByName || "",
+    invitedAt: invitation.invitedAt || now,
+    acceptedBy: invitation.acceptedBy || "",
+    acceptedAt: invitation.acceptedAt || "",
+    expiresAt: invitation.expiresAt || ""
   };
 }
 

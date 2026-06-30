@@ -4,10 +4,12 @@ import {
   watchAuthState
 } from "./firebase.js";
 import {
+  createInvitation,
   deleteItem as deleteStoredItem,
   getActiveHousehold,
   getHouseholds,
   exportItems,
+  getInvitations,
   getItems,
   getLocations,
   getMembers,
@@ -17,8 +19,10 @@ import {
   setActiveHousehold,
   setAuthenticatedUser,
   subscribeItems,
+  subscribeInvitations,
   subscribeMembers,
   unsubscribeItems,
+  unsubscribeInvitations,
   unsubscribeMembers,
   updateItem as updateStoredItem
 } from "./dataService.js";
@@ -32,6 +36,7 @@ import {
   readForm,
   renderItems,
   renderHouseholdDisplay,
+  renderInvitations,
   renderMembers,
   renderLocationOptions
 } from "./ui.js";
@@ -41,6 +46,7 @@ let locations = [];
 let households = [];
 let activeHousehold = null;
 let members = [];
+let invitations = [];
 let currentUser = null;
 let signInInProgress = false;
 
@@ -81,6 +87,7 @@ function render() {
   renderLocationOptions(getLocationSuggestions());
   renderHouseholdDisplay(households, activeHousehold);
   renderMembers(members);
+  renderInvitations(invitations, Boolean(currentUser));
 }
 
 function syncItems(nextItems) {
@@ -90,6 +97,11 @@ function syncItems(nextItems) {
 
 function syncMembers(nextMembers) {
   members = nextMembers;
+  render();
+}
+
+function syncInvitations(nextInvitations) {
+  invitations = nextInvitations;
   render();
 }
 
@@ -183,6 +195,7 @@ function updateAuthDisplay(user, message) {
     households = [];
     activeHousehold = null;
     members = [];
+    invitations = [];
     elements.authPhoto.removeAttribute("src");
     elements.authPhoto.alt = "";
     elements.authPhoto.hidden = true;
@@ -229,11 +242,13 @@ function setupAuth() {
     if (!user) {
       unsubscribeItems();
       unsubscribeMembers();
+      unsubscribeInvitations();
       items = await getItems();
       locations = await getLocations();
       households = [];
       activeHousehold = null;
       members = [];
+      invitations = [];
       updateAuthDisplay(null);
       render();
       return;
@@ -246,10 +261,12 @@ function setupAuth() {
     households = await getHouseholds();
     activeHousehold = await getActiveHousehold();
     members = await getMembers();
+    invitations = await getInvitations();
     updateAuthDisplay(user);
     render();
     subscribeItems(syncItems);
     subscribeMembers(syncMembers);
+    subscribeInvitations(syncInvitations);
   });
 }
 
@@ -272,9 +289,23 @@ elements.householdSelect.addEventListener("change", async () => {
   items = await getItems();
   locations = await getLocations();
   members = await getMembers();
+  invitations = await getInvitations();
   render();
   subscribeItems(syncItems);
   subscribeMembers(syncMembers);
+  subscribeInvitations(syncInvitations);
+});
+
+elements.testInvitationButton.addEventListener("click", async () => {
+  const invitation = await createInvitation({
+    email: "test-invite@example.com",
+    role: "member"
+  });
+
+  if (!invitation) return;
+
+  invitations = await getInvitations();
+  render();
 });
 
 elements.itemsList.addEventListener("click", async event => {
@@ -340,6 +371,7 @@ async function initializeApp() {
   households = [];
   activeHousehold = null;
   members = [];
+  invitations = [];
   render();
   setupAuth();
   registerServiceWorker();

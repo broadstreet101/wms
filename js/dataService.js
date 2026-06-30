@@ -4,14 +4,17 @@ import {
   isActiveHouseholdMember,
   loadCloudLocations,
   loadHouseholdMembers,
+  loadHouseholdInvitations,
   loadItems,
   loadCloudItems,
   loadLocations,
   loadUserHouseholds,
+  normalizeInvitation,
   normalizeItem,
   normalizeLocation,
   replaceCloudItems,
   saveCloudItem,
+  saveHouseholdInvitation,
   saveCloudLocation,
   saveItems,
   saveLocations
@@ -28,10 +31,13 @@ let activeHouseholdPromise = null;
 let activeUnsubscribe = null;
 let activeMembersUnsubscribe = null;
 let activeMembersCallback = null;
+let activeInvitationsUnsubscribe = null;
+let activeInvitationsCallback = null;
 let cachedItems = loadItems();
 let cachedLocations = loadLocations();
 let cachedHouseholds = [];
 let cachedMembers = [];
+let cachedInvitations = [];
 
 function getActiveHouseholdStorageKey(userId) {
   return `wheresMyStuff.activeHousehold.${userId}`;
@@ -51,6 +57,10 @@ function getHouseholdItemsCollection(householdId) {
 
 function getHouseholdMembersCollection(householdId) {
   return collection(db, "households", householdId, "members");
+}
+
+function getHouseholdInvitationsCollection(householdId) {
+  return collection(db, "households", householdId, "invitations");
 }
 
 function findMatchingLocation(locations, name) {
@@ -81,6 +91,18 @@ function normalizeMembersSnapshot(snapshot) {
     }))
     .filter(member => member.status !== "removed")
     .sort((a, b) => (a.displayName || a.email || "").localeCompare(b.displayName || b.email || ""));
+}
+
+function normalizeInvitationsSnapshot(snapshot) {
+  return snapshot.docs
+    .map(documentSnapshot =>
+      normalizeInvitation({
+        id: documentSnapshot.id,
+        ...documentSnapshot.data()
+      })
+    )
+    .filter(invitation => invitation.status === "pending")
+    .sort((a, b) => b.invitedAt.localeCompare(a.invitedAt));
 }
 
 async function ensureActiveHousehold() {
@@ -122,11 +144,14 @@ export function setAuthenticatedUser(user) {
   if (nextUserId !== currentUserId) {
     unsubscribeItems();
     unsubscribeMembers();
+    unsubscribeInvitations();
     activeMembersCallback = null;
+    activeInvitationsCallback = null;
     activeHouseholdId = null;
     activeHouseholdPromise = null;
     cachedHouseholds = [];
     cachedMembers = [];
+    cachedInvitations = [];
   }
 
   activeUser = user || null;
@@ -170,9 +195,14 @@ export async function setActiveHousehold(householdId) {
   cachedItems = await loadCloudItems(householdId);
   cachedLocations = await loadCloudLocations(householdId);
   cachedMembers = await loadHouseholdMembers(householdId);
+  cachedInvitations = await loadHouseholdInvitations(householdId);
 
   if (activeMembersCallback) {
     subscribeMembers(activeMembersCallback);
+  }
+
+  if (activeInvitationsCallback) {
+    subscribeInvitations(activeInvitationsCallback);
   }
 
   return getActiveHousehold();
@@ -237,6 +267,36 @@ export function subscribeMembers(callback) {
   return unsubscribeMembers;
 }
 
+export function unsubscribeInvitations() {
+  if (!activeInvitationsUnsubscribe) return;
+
+  const unsubscribe = activeInvitationsUnsubscribe;
+  activeInvitationsUnsubscribe = null;
+  unsubscribe();
+}
+
+export function subscribeInvitations(callback) {
+  unsubscribeInvitations();
+  activeInvitationsCallback = callback;
+
+  if (!isUsingFirestore()) {
+    return unsubscribeInvitations;
+  }
+
+  activeInvitationsUnsubscribe = onSnapshot(
+    getHouseholdInvitationsCollection(activeHouseholdId),
+    snapshot => {
+      cachedInvitations = normalizeInvitationsSnapshot(snapshot);
+      callback(cachedInvitations);
+    },
+    error => {
+      warnFirestoreUnavailable("invitations listener", error);
+    }
+  );
+
+  return unsubscribeInvitations;
+}
+
 export async function getMembers() {
   if (!hasAuthenticatedUser()) {
     cachedMembers = [];
@@ -253,6 +313,62 @@ export async function getMembers() {
   }
 
   return cachedMembers;
+}
+
+export async function getInvitations() {
+  if (!hasAuthenticatedUser()) {
+    cachedInvitations = [];
+    return cachedInvitations;
+  }
+
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return cachedInvitations;
+
+  try {
+    cachedInvitations = await loadHouseholdInvitations(householdId);
+  } catch (error) {
+    warnFirestoreUnavailable("invitations load", error);
+  }
+
+  return cachedInvitations;
+}
+
+export async function createInvitation(invitation) {
+  if (!hasAuthenticatedUser()) return null;
+
+  const email = (invitation?.email || "").trim();
+  if (!email) return null;
+
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return null;
+
+  const activeHousehold = await getActiveHousehold();
+  const invitedAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const savedInvitation = normalizeInvitation({
+    ...invitation,
+    householdId,
+    householdName: activeHousehold?.name || "My Household",
+    email,
+    role: invitation?.role || "member",
+    status: "pending",
+    invitedBy: activeUser.uid,
+    invitedByName: activeUser.displayName || activeUser.email || "Household member",
+    invitedAt,
+    expiresAt
+  });
+
+  try {
+    await saveHouseholdInvitation(householdId, savedInvitation);
+    cachedInvitations = [
+      savedInvitation,
+      ...cachedInvitations.filter(existingInvitation => existingInvitation.id !== savedInvitation.id)
+    ].sort((a, b) => b.invitedAt.localeCompare(a.invitedAt));
+  } catch (error) {
+    warnFirestoreUnavailable("invitation save", error);
+  }
+
+  return savedInvitation;
 }
 
 export async function getItems() {
