@@ -40,8 +40,15 @@
     <section class="invitations-panel" id="invitationsPanel" aria-label="Pending invitations" hidden>
         <div class="panel-heading">
             <h2>Pending Invitations</h2>
-            <button id="testInvitationButton" type="button" class="small secondary">Create Test Invitation</button>
         </div>
+        <form class="invitation-form" id="invitationForm">
+            <input id="invitationEmail" type="email" placeholder="member@example.com" autocomplete="email" />
+            <select id="invitationRole" aria-label="Invitation role">
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+            </select>
+            <button id="createInvitationButton" type="submit" class="small secondary">Create Invitation</button>
+        </form>
         <div class="invitations-list" id="invitationsList"></div>
     </section>
 </header>

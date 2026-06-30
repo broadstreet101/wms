@@ -162,6 +162,20 @@ header p {
   gap: 0.55rem;
 }
 
+.invitation-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.invitation-form input,
+.invitation-form select {
+  padding: 0.58rem 0.65rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+
 .member,
 .invitation {
   display: grid;
@@ -227,6 +241,10 @@ header p {
   .auth-profile button {
     grid-column: 1 / -1;
     width: 100%;
+  }
+
+  .invitation-form {
+    grid-template-columns: 1fr;
   }
 }
 

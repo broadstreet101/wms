@@ -36,7 +36,10 @@ export const elements = {
   membersList: document.getElementById("membersList"),
   invitationsPanel: document.getElementById("invitationsPanel"),
   invitationsList: document.getElementById("invitationsList"),
-  testInvitationButton: document.getElementById("testInvitationButton")
+  invitationForm: document.getElementById("invitationForm"),
+  invitationEmail: document.getElementById("invitationEmail"),
+  invitationRole: document.getElementById("invitationRole"),
+  createInvitationButton: document.getElementById("createInvitationButton")
 };
 
 export function populateCategoryControls() {
@@ -86,6 +89,18 @@ export function readForm() {
     room: elements.itemRoom.value.trim(),
     notes: elements.itemNotes.value.trim()
   };
+}
+
+export function readInvitationForm() {
+  return {
+    email: elements.invitationEmail.value.trim(),
+    role: elements.invitationRole.value
+  };
+}
+
+export function resetInvitationForm() {
+  elements.invitationEmail.value = "";
+  elements.invitationRole.value = "member";
 }
 
 export function renderLocationOptions(locations) {
@@ -162,7 +177,7 @@ export function renderMembers(members) {
 
 export function renderInvitations(invitations, isSignedIn) {
   elements.invitationsPanel.hidden = !isSignedIn;
-  elements.testInvitationButton.hidden = !isSignedIn;
+  elements.invitationForm.hidden = !isSignedIn;
 
   if (!isSignedIn) {
     elements.invitationsList.innerHTML = "";

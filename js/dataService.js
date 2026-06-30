@@ -336,12 +336,26 @@ export async function getInvitations() {
 export async function createInvitation(invitation) {
   if (!hasAuthenticatedUser()) return null;
 
-  const email = (invitation?.email || "").trim();
+  const email = (invitation?.email || "").trim().toLocaleLowerCase();
   if (!email) return null;
 
   const householdId = await ensureActiveHousehold();
   if (!householdId) return null;
 
+  const normalizedEmail = email.toLocaleLowerCase();
+  const existingInvitation = cachedInvitations.find(existing =>
+    existing.status === "pending"
+    && existing.householdId === householdId
+    && existing.normalizedEmail === normalizedEmail
+  );
+
+  if (existingInvitation) {
+    const error = new Error("A pending invitation already exists for this email.");
+    error.code = "duplicate-invitation";
+    throw error;
+  }
+
+  const role = invitation?.role === "admin" ? "admin" : "member";
   const activeHousehold = await getActiveHousehold();
   const invitedAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -350,7 +364,8 @@ export async function createInvitation(invitation) {
     householdId,
     householdName: activeHousehold?.name || "My Household",
     email,
-    role: invitation?.role || "member",
+    normalizedEmail,
+    role,
     status: "pending",
     invitedBy: activeUser.uid,
     invitedByName: activeUser.displayName || activeUser.email || "Household member",

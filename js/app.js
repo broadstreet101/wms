@@ -33,12 +33,14 @@ import {
   populateCategoryControls,
   resetForm,
   fillFormForEdit,
+  readInvitationForm,
   readForm,
   renderItems,
   renderHouseholdDisplay,
   renderInvitations,
   renderMembers,
-  renderLocationOptions
+  renderLocationOptions,
+  resetInvitationForm
 } from "./ui.js";
 
 let items = [];
@@ -296,16 +298,31 @@ elements.householdSelect.addEventListener("change", async () => {
   subscribeInvitations(syncInvitations);
 });
 
-elements.testInvitationButton.addEventListener("click", async () => {
-  const invitation = await createInvitation({
-    email: "test-invite@example.com",
-    role: "member"
-  });
+elements.invitationForm.addEventListener("submit", async event => {
+  event.preventDefault();
 
-  if (!invitation) return;
+  const invitationData = readInvitationForm();
+  if (!invitationData.email) {
+    alert("Enter an email address before creating an invitation.");
+    return;
+  }
 
-  invitations = await getInvitations();
-  render();
+  try {
+    const invitation = await createInvitation(invitationData);
+    if (!invitation) return;
+
+    invitations = await getInvitations();
+    resetInvitationForm();
+    render();
+  } catch (error) {
+    if (error.code === "duplicate-invitation") {
+      alert("A pending invitation already exists for that email address.");
+      return;
+    }
+
+    console.error("Invitation failed:", error);
+    alert("Invitation failed. Check the browser console for details.");
+  }
 });
 
 elements.itemsList.addEventListener("click", async event => {
