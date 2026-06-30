@@ -6,7 +6,8 @@ import {
   doc,
   getDoc,
   getDocs,
-  setDoc
+  setDoc,
+  writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 function getUserDocument(userId) {
@@ -187,6 +188,63 @@ export async function saveHouseholdInvitation(householdId, invitation) {
 
   await setDoc(getHouseholdInvitationDocument(householdId, normalized.id), normalized);
   return normalized;
+}
+
+export async function loadHouseholdInvitation(householdId, invitationId) {
+  const snapshot = await getDoc(getHouseholdInvitationDocument(householdId, invitationId));
+  if (!snapshot.exists()) return null;
+
+  return normalizeInvitation({
+    id: snapshot.id,
+    ...snapshot.data()
+  });
+}
+
+export async function acceptHouseholdInvitation(householdId, invitation, user) {
+  const now = new Date().toISOString();
+  const role = invitation.role === "admin" ? "admin" : "member";
+  const member = {
+    userId: user.uid,
+    displayName: user.displayName || "",
+    email: user.email || "",
+    photoURL: user.photoURL || "",
+    role,
+    status: "active",
+    invitedBy: invitation.invitedBy || "",
+    invitationId: invitation.id,
+    joinedAt: now,
+    updatedAt: now
+  };
+  const membership = {
+    householdId,
+    role,
+    status: "active",
+    invitationId: invitation.id,
+    joinedAt: now,
+    lastOpenedAt: now
+  };
+
+  const batch = writeBatch(db);
+  batch.set(getHouseholdMemberDocument(householdId, user.uid), member);
+  batch.set(getUserMembershipDocument(user.uid, householdId), membership);
+  batch.update(getHouseholdInvitationDocument(householdId, invitation.id), {
+    status: "accepted",
+    acceptedBy: user.uid,
+    acceptedAt: now
+  });
+
+  await batch.commit();
+
+  return {
+    member,
+    membership,
+    invitation: normalizeInvitation({
+      ...invitation,
+      status: "accepted",
+      acceptedBy: user.uid,
+      acceptedAt: now
+    })
+  };
 }
 
 export async function isActiveHouseholdMember(userId, householdId) {
@@ -383,7 +441,8 @@ export function normalizeInvitation(invitation) {
     invitedAt: invitation.invitedAt || now,
     acceptedBy: invitation.acceptedBy || "",
     acceptedAt: invitation.acceptedAt || "",
-    expiresAt: invitation.expiresAt || ""
+    expiresAt: invitation.expiresAt || "",
+    expiresAtMillis: invitation.expiresAtMillis || (invitation.expiresAt ? Date.parse(invitation.expiresAt) : null)
   };
 }
 

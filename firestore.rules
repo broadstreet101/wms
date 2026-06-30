@@ -14,6 +14,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/households/$(householdId)/members/$(userId);
     }
 
+    function householdInvitationPath(householdId, invitationId) {
+      return /databases/$(database)/documents/households/$(householdId)/invitations/$(invitationId);
+    }
+
     function isHouseholdMember(householdId) {
       return signedIn()
         && exists(householdMemberPath(householdId, request.auth.uid))
@@ -34,11 +38,82 @@ service cloud.firestore {
         && request.resource.data.status == "active";
     }
 
+    function isCreatingOwnOwnerMembershipLink(userId, householdId) {
+      return isSelf(userId)
+        && exists(/databases/$(database)/documents/households/$(householdId))
+        && get(/databases/$(database)/documents/households/$(householdId)).data.ownerId == request.auth.uid
+        && request.resource.data.householdId == householdId
+        && request.resource.data.role == "owner"
+        && request.resource.data.status == "active";
+    }
+
+    function authEmailMatches(normalizedEmail) {
+      return signedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() == normalizedEmail;
+    }
+
+    function invitationIsNotExpired(invitation) {
+      return !("expiresAt" in invitation)
+        || invitation.expiresAt == ""
+        || (
+          "expiresAtMillis" in invitation
+          && invitation.expiresAtMillis is number
+          && invitation.expiresAtMillis > request.time.toMillis()
+        );
+    }
+
+    function isOwnPendingInvitation(householdId, invitationId) {
+      return signedIn()
+        && exists(householdInvitationPath(householdId, invitationId))
+        && get(householdInvitationPath(householdId, invitationId)).data.status == "pending"
+        && authEmailMatches(get(householdInvitationPath(householdId, invitationId)).data.normalizedEmail)
+        && invitationIsNotExpired(get(householdInvitationPath(householdId, invitationId)).data);
+    }
+
+    function isAcceptingOwnInvitation(householdId, invitationId) {
+      return isOwnPendingInvitation(householdId, invitationId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "acceptedBy",
+          "acceptedAt"
+        ])
+        && request.resource.data.status == "accepted"
+        && request.resource.data.acceptedBy == request.auth.uid
+        && request.resource.data.acceptedAt is string;
+    }
+
+    function invitationRole(householdId, invitationId) {
+      return get(householdInvitationPath(householdId, invitationId)).data.role;
+    }
+
+    function isCreatingOwnInvitedMember(householdId, userId) {
+      return isSelf(userId)
+        && request.resource.data.invitationId is string
+        && isOwnPendingInvitation(householdId, request.resource.data.invitationId)
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == invitationRole(householdId, request.resource.data.invitationId)
+        && request.resource.data.status == "active";
+    }
+
+    function isCreatingOwnInvitedMembership(userId, householdId) {
+      return isSelf(userId)
+        && request.resource.data.invitationId is string
+        && isOwnPendingInvitation(householdId, request.resource.data.invitationId)
+        && request.resource.data.householdId == householdId
+        && request.resource.data.role == invitationRole(householdId, request.resource.data.invitationId)
+        && request.resource.data.status == "active";
+    }
+
     match /users/{userId} {
       allow read, write: if isSelf(userId);
 
       match /householdMemberships/{householdId} {
-        allow read, write: if isSelf(userId);
+        allow read, update, delete: if isSelf(userId);
+        allow create: if isCreatingOwnOwnerMembershipLink(userId, householdId)
+          || isHouseholdMember(householdId)
+          || isCreatingOwnInvitedMembership(userId, householdId);
       }
     }
 
@@ -48,7 +123,8 @@ service cloud.firestore {
 
       match /members/{userId} {
         allow create: if isCreatingOwnOwnerMembership(householdId, userId)
-          || isHouseholdMember(householdId);
+          || isHouseholdMember(householdId)
+          || isCreatingOwnInvitedMember(householdId, userId);
         allow read, update, delete: if isHouseholdMember(householdId);
       }
 
@@ -61,7 +137,11 @@ service cloud.firestore {
       }
 
       match /invitations/{invitationId} {
-        allow read, write: if isHouseholdMember(householdId);
+        allow get: if isHouseholdMember(householdId)
+          || isOwnPendingInvitation(householdId, invitationId);
+        allow list, create, delete: if isHouseholdMember(householdId);
+        allow update: if isHouseholdMember(householdId)
+          || isAcceptingOwnInvitation(householdId, invitationId);
       }
     }
 

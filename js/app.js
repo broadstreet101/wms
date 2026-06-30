@@ -4,8 +4,10 @@ import {
   watchAuthState
 } from "./firebase.js";
 import {
+  acceptInvitation,
   createInvitation,
   deleteItem as deleteStoredItem,
+  getDirectInvitation,
   getActiveHousehold,
   getHouseholds,
   exportItems,
@@ -35,6 +37,7 @@ import {
   fillFormForEdit,
   readInvitationForm,
   readForm,
+  renderInvitationAcceptance,
   renderItems,
   renderHouseholdDisplay,
   renderInvitations,
@@ -49,8 +52,28 @@ let households = [];
 let activeHousehold = null;
 let members = [];
 let invitations = [];
+let directInvitation = null;
+let directInvitationMessage = "";
+let directInvitationParams = getDirectInvitationParams();
 let currentUser = null;
 let signInInProgress = false;
+
+function getDirectInvitationParams() {
+  const params = new URLSearchParams(window.location.search);
+  const householdId = params.get("householdId");
+  const invitationId = params.get("invitationId");
+
+  if (!householdId || !invitationId) return null;
+  return { householdId, invitationId };
+}
+
+function clearInvitationUrlParams() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("householdId");
+  url.searchParams.delete("invitationId");
+  window.history.replaceState({}, "", url);
+  directInvitationParams = null;
+}
 
 function getLocationSuggestions() {
   const suggestions = new Map();
@@ -88,6 +111,11 @@ function render() {
   renderItems(items, filtered);
   renderLocationOptions(getLocationSuggestions());
   renderHouseholdDisplay(households, activeHousehold);
+  renderInvitationAcceptance(
+    directInvitation,
+    directInvitationMessage,
+    Boolean(currentUser && directInvitation)
+  );
   renderMembers(members);
   renderInvitations(invitations, Boolean(currentUser));
 }
@@ -105,6 +133,42 @@ function syncMembers(nextMembers) {
 function syncInvitations(nextInvitations) {
   invitations = nextInvitations;
   render();
+}
+
+async function loadDirectInvitationForCurrentUser() {
+  directInvitationParams = getDirectInvitationParams();
+
+  if (!directInvitationParams) {
+    directInvitation = null;
+    directInvitationMessage = "";
+    return;
+  }
+
+  if (!currentUser) {
+    directInvitation = null;
+    directInvitationMessage = "Sign in with the invited Google account to accept this invitation.";
+    return;
+  }
+
+  try {
+    directInvitation = await getDirectInvitation(
+      directInvitationParams.householdId,
+      directInvitationParams.invitationId
+    );
+    directInvitationMessage = "";
+  } catch (error) {
+    directInvitation = null;
+    directInvitationMessage = error.message || "This invitation could not be loaded.";
+  }
+}
+
+async function reloadSignedInData() {
+  items = await getItems();
+  locations = await getLocations();
+  households = await getHouseholds();
+  activeHousehold = await getActiveHousehold();
+  members = await getMembers();
+  invitations = await getInvitations();
 }
 
 async function upsertItem(formData) {
@@ -251,6 +315,7 @@ function setupAuth() {
       activeHousehold = null;
       members = [];
       invitations = [];
+      await loadDirectInvitationForCurrentUser();
       updateAuthDisplay(null);
       render();
       return;
@@ -258,12 +323,8 @@ function setupAuth() {
 
     updateAuthDisplay(user, "Loading cloud items...");
 
-    items = await getItems();
-    locations = await getLocations();
-    households = await getHouseholds();
-    activeHousehold = await getActiveHousehold();
-    members = await getMembers();
-    invitations = await getInvitations();
+    await reloadSignedInData();
+    await loadDirectInvitationForCurrentUser();
     updateAuthDisplay(user);
     render();
     subscribeItems(syncItems);
@@ -296,6 +357,32 @@ elements.householdSelect.addEventListener("change", async () => {
   subscribeItems(syncItems);
   subscribeMembers(syncMembers);
   subscribeInvitations(syncInvitations);
+});
+
+elements.acceptInvitationButton.addEventListener("click", async () => {
+  if (!directInvitationParams) return;
+
+  elements.acceptInvitationButton.disabled = true;
+
+  try {
+    activeHousehold = await acceptInvitation(
+      directInvitationParams.householdId,
+      directInvitationParams.invitationId
+    );
+    await reloadSignedInData();
+    directInvitation = null;
+    directInvitationMessage = `Invitation accepted. ${activeHousehold?.name || "Household"} is now active.`;
+    clearInvitationUrlParams();
+    render();
+    subscribeItems(syncItems);
+    subscribeMembers(syncMembers);
+    subscribeInvitations(syncInvitations);
+  } catch (error) {
+    directInvitationMessage = error.message || "This invitation could not be accepted.";
+    render();
+  } finally {
+    elements.acceptInvitationButton.disabled = false;
+  }
 });
 
 elements.invitationForm.addEventListener("submit", async event => {
@@ -389,6 +476,7 @@ async function initializeApp() {
   activeHousehold = null;
   members = [];
   invitations = [];
+  await loadDirectInvitationForCurrentUser();
   render();
   setupAuth();
   registerServiceWorker();

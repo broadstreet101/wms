@@ -1,8 +1,10 @@
 import {
+  acceptHouseholdInvitation,
   deleteCloudItem,
   ensureDefaultHousehold,
   isActiveHouseholdMember,
   loadCloudLocations,
+  loadHouseholdInvitation,
   loadHouseholdMembers,
   loadHouseholdInvitations,
   loadItems,
@@ -81,6 +83,16 @@ function normalizeSnapshot(snapshot) {
 
 function warnFirestoreUnavailable(action, error) {
   console.warn(`Firestore ${action} unavailable. Continuing with current in-memory items.`, error);
+}
+
+function getNormalizedUserEmail() {
+  return (activeUser?.email || "").trim().toLocaleLowerCase();
+}
+
+function makeInvitationError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
 }
 
 function normalizeMembersSnapshot(snapshot) {
@@ -333,6 +345,66 @@ export async function getInvitations() {
   return cachedInvitations;
 }
 
+export async function getDirectInvitation(householdId, invitationId) {
+  if (!hasAuthenticatedUser()) {
+    throw makeInvitationError("not-signed-in", "Sign in to view this invitation.");
+  }
+
+  const normalizedUserEmail = getNormalizedUserEmail();
+  if (!normalizedUserEmail) {
+    throw makeInvitationError("missing-email", "Your account does not have an email address.");
+  }
+
+  let invitation = null;
+
+  try {
+    invitation = await loadHouseholdInvitation(householdId, invitationId);
+  } catch (error) {
+    warnFirestoreUnavailable("invitation load", error);
+    throw makeInvitationError("invitation-unavailable", "This invitation could not be loaded.");
+  }
+
+  validateDirectInvitation(invitation, normalizedUserEmail);
+  return invitation;
+}
+
+export async function acceptInvitation(householdId, invitationId) {
+  const invitation = await getDirectInvitation(householdId, invitationId);
+
+  try {
+    await acceptHouseholdInvitation(householdId, invitation, activeUser);
+    cachedInvitations = cachedInvitations.filter(existing => existing.id !== invitation.id);
+    await setActiveHousehold(householdId);
+  } catch (error) {
+    warnFirestoreUnavailable("invitation acceptance", error);
+    throw makeInvitationError("acceptance-failed", "This invitation could not be accepted.");
+  }
+
+  return getActiveHousehold();
+}
+
+function validateDirectInvitation(invitation, normalizedUserEmail) {
+  if (!invitation) {
+    throw makeInvitationError("not-found", "This invitation was not found.");
+  }
+
+  if (invitation.status !== "pending") {
+    throw makeInvitationError("not-pending", "This invitation is no longer pending.");
+  }
+
+  if (invitation.normalizedEmail !== normalizedUserEmail) {
+    throw makeInvitationError("email-mismatch", "This invitation is for a different email address.");
+  }
+
+  const expiresAtMillis = invitation.expiresAtMillis || (
+    invitation.expiresAt ? new Date(invitation.expiresAt).getTime() : null
+  );
+
+  if (expiresAtMillis && expiresAtMillis <= Date.now()) {
+    throw makeInvitationError("expired", "This invitation has expired.");
+  }
+}
+
 export async function createInvitation(invitation) {
   if (!hasAuthenticatedUser()) return null;
 
@@ -358,7 +430,8 @@ export async function createInvitation(invitation) {
   const role = invitation?.role === "admin" ? "admin" : "member";
   const activeHousehold = await getActiveHousehold();
   const invitedAt = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAtMillis = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  const expiresAt = new Date(expiresAtMillis).toISOString();
   const savedInvitation = normalizeInvitation({
     ...invitation,
     householdId,
@@ -370,7 +443,8 @@ export async function createInvitation(invitation) {
     invitedBy: activeUser.uid,
     invitedByName: activeUser.displayName || activeUser.email || "Household member",
     invitedAt,
-    expiresAt
+    expiresAt,
+    expiresAtMillis
   });
 
   try {

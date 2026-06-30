@@ -32,6 +32,10 @@ export const elements = {
   authStatus: document.getElementById("authStatus"),
   householdName: document.getElementById("householdName"),
   householdSelect: document.getElementById("householdSelect"),
+  invitationAcceptancePanel: document.getElementById("invitationAcceptancePanel"),
+  invitationAcceptanceDetails: document.getElementById("invitationAcceptanceDetails"),
+  invitationAcceptanceMessage: document.getElementById("invitationAcceptanceMessage"),
+  acceptInvitationButton: document.getElementById("acceptInvitationButton"),
   membersPanel: document.getElementById("membersPanel"),
   membersList: document.getElementById("membersList"),
   invitationsPanel: document.getElementById("invitationsPanel"),
@@ -173,6 +177,24 @@ export function renderMembers(members) {
       `;
     })
     .join("");
+}
+
+export function renderInvitationAcceptance(invitation, message, canAccept) {
+  const shouldShow = Boolean(invitation || message);
+  elements.invitationAcceptancePanel.hidden = !shouldShow;
+  elements.acceptInvitationButton.hidden = !canAccept;
+  elements.invitationAcceptanceMessage.textContent = message || "";
+
+  if (!invitation) {
+    elements.invitationAcceptanceDetails.innerHTML = "";
+    return;
+  }
+
+  elements.invitationAcceptanceDetails.innerHTML = `
+    <strong>${escapeHtml(invitation.householdName || "Household")}</strong>
+    <span>Role: ${escapeHtml(getRoleLabel(invitation.role))}</span>
+    <span>Invited by: ${escapeHtml(invitation.invitedByName || "Household member")}</span>
+  `;
 }
 
 export function renderInvitations(invitations, isSignedIn) {
