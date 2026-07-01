@@ -75,6 +75,32 @@ function clearInvitationUrlParams() {
   directInvitationParams = null;
 }
 
+function makeInvitationLink(invitation) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("householdId", invitation.householdId);
+  url.searchParams.set("invitationId", invitation.id);
+  return url.toString();
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const input = document.createElement("textarea");
+  input.value = text;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.append(input);
+  input.select();
+  document.execCommand("copy");
+  input.remove();
+}
+
 function getLocationSuggestions() {
   const suggestions = new Map();
 
@@ -146,7 +172,7 @@ async function loadDirectInvitationForCurrentUser() {
 
   if (!currentUser) {
     directInvitation = null;
-    directInvitationMessage = "Sign in with the invited Google account to accept this invitation.";
+    directInvitationMessage = "Sign in to accept this invitation.";
     return;
   }
 
@@ -409,6 +435,25 @@ elements.invitationForm.addEventListener("submit", async event => {
 
     console.error("Invitation failed:", error);
     alert("Invitation failed. Check the browser console for details.");
+  }
+});
+
+elements.invitationsList.addEventListener("click", async event => {
+  const button = event.target.closest("button[data-action='copy-invite-link']");
+  if (!button) return;
+
+  const invitation = invitations.find(existingInvitation => existingInvitation.id === button.dataset.id);
+  if (!invitation) return;
+
+  try {
+    await copyText(makeInvitationLink(invitation));
+    button.textContent = "Copied";
+    window.setTimeout(() => {
+      button.textContent = "Copy Invite Link";
+    }, 1600);
+  } catch (error) {
+    console.error("Copy invite link failed:", error);
+    alert("Copy failed. Check the browser console for details.");
   }
 });
 

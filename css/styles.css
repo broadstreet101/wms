@@ -234,6 +234,10 @@ header p {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.invitation button {
+  justify-self: start;
+}
+
 .invitation-acceptance-details {
   display: grid;
   gap: 0.2rem;

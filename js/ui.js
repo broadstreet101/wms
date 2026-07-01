@@ -218,6 +218,7 @@ export function renderInvitations(invitations, isSignedIn) {
           <strong>${escapeHtml(invitation.email)}</strong>
           <span>${escapeHtml(getRoleLabel(invitation.role))} - ${escapeHtml(invitation.status)}</span>
         </div>
+        <button class="small secondary" type="button" data-action="copy-invite-link" data-id="${escapeHtml(invitation.id)}">Copy Invite Link</button>
       </div>
     `)
     .join("");
