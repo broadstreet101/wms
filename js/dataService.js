@@ -22,6 +22,7 @@ import {
   saveCloudLocation,
   saveItems,
   saveLocations,
+  transferHouseholdOwnership as transferCloudHouseholdOwnership,
   updateHouseholdName as saveCloudHouseholdName
 } from "./storage.js";
 import { db } from "./firebase.js";
@@ -439,6 +440,54 @@ export async function removeHouseholdMember(userId) {
   } catch (error) {
     warnFirestoreUnavailable("member removal", error);
     throw makeDataError("member-remove-failed", "This household member could not be removed.");
+  }
+
+  return cachedMembers;
+}
+
+export async function transferHouseholdOwnership(newOwnerId) {
+  if (!hasAuthenticatedUser()) return cachedMembers;
+
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return cachedMembers;
+
+  const newOwner = cachedMembers.find(existing => existing.userId === newOwnerId);
+  const activeHousehold = await getActiveHousehold();
+
+  if (activeHousehold?.role !== "owner") {
+    throw makeDataError("not-owner", "Only the household owner can transfer ownership.");
+  }
+
+  if (!newOwner) {
+    throw makeDataError("member-not-found", "This household member was not found.");
+  }
+
+  if (newOwner.userId === activeUser.uid || newOwner.role === "owner") {
+    throw makeDataError("invalid-owner-transfer", "Choose another active household member.");
+  }
+
+  try {
+    const transfer = await transferCloudHouseholdOwnership(householdId, activeUser.uid, newOwnerId);
+    cachedMembers = cachedMembers.map(member => {
+      if (member.userId === activeUser.uid) {
+        return { ...member, role: "admin", updatedAt: transfer.updatedAt };
+      }
+
+      if (member.userId === newOwnerId) {
+        return { ...member, role: "owner", updatedAt: transfer.updatedAt };
+      }
+
+      return member;
+    });
+    cacheHousehold({
+      ...activeHousehold,
+      ownerId: newOwnerId,
+      role: "admin",
+      updatedAt: transfer.updatedAt
+    });
+  } catch (error) {
+    warnFirestoreUnavailable("ownership transfer", error);
+    throw makeDataError("ownership-transfer-failed", "Ownership could not be transferred.");
   }
 
   return cachedMembers;

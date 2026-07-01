@@ -219,6 +219,13 @@ header p {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
+.member-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
 .invitation {
   grid-template-columns: auto minmax(0, 1fr);
 }

@@ -26,6 +26,7 @@ import {
   subscribeItems,
   subscribeInvitations,
   subscribeMembers,
+  transferHouseholdOwnership,
   unsubscribeActiveHousehold,
   unsubscribeItems,
   unsubscribeInvitations,
@@ -553,22 +554,41 @@ elements.invitationsList.addEventListener("click", async event => {
 });
 
 elements.membersList.addEventListener("click", async event => {
-  const button = event.target.closest("button[data-action='remove-member']");
+  const button = event.target.closest("button[data-action]");
   if (!button) return;
 
   const member = members.find(existingMember => existingMember.userId === button.dataset.id);
   if (!member) return;
 
   const displayName = member.displayName || member.email || "this member";
-  const confirmed = confirm(`Remove ${displayName} from this household?`);
-  if (!confirmed) return;
 
-  try {
-    members = await removeHouseholdMember(member.userId);
-    render();
-  } catch (error) {
-    console.error("Remove member failed:", error);
-    alert(error.message || "This household member could not be removed.");
+  if (button.dataset.action === "remove-member") {
+    const confirmed = confirm(`Remove ${displayName} from this household?`);
+    if (!confirmed) return;
+
+    try {
+      members = await removeHouseholdMember(member.userId);
+      render();
+    } catch (error) {
+      console.error("Remove member failed:", error);
+      alert(error.message || "This household member could not be removed.");
+    }
+  }
+
+  if (button.dataset.action === "transfer-ownership") {
+    const confirmed = confirm(
+      `Transfer household ownership to ${displayName}? You will become an admin.`
+    );
+    if (!confirmed) return;
+
+    try {
+      members = await transferHouseholdOwnership(member.userId);
+      activeHousehold = await getActiveHousehold();
+      render();
+    } catch (error) {
+      console.error("Transfer ownership failed:", error);
+      alert(error.message || "Ownership could not be transferred.");
+    }
   }
 });
 

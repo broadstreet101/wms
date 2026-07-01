@@ -119,6 +119,83 @@ service cloud.firestore {
         && request.resource.data.updatedAt is string;
     }
 
+    function isTransferringHouseholdOwnership(householdId) {
+      let newOwnerId = request.resource.data.ownerId;
+      return isHouseholdOwner(householdId)
+        && resource.data.ownerId == request.auth.uid
+        && newOwnerId is string
+        && newOwnerId != request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "ownerId",
+          "updatedAt"
+        ])
+        && request.resource.data.updatedAt is string
+        && exists(householdMemberPath(householdId, newOwnerId))
+        && get(householdMemberPath(householdId, newOwnerId)).data.status == "active"
+        && get(householdMemberPath(householdId, newOwnerId)).data.role != "owner"
+        && getAfter(householdMemberPath(householdId, newOwnerId)).data.role == "owner"
+        && getAfter(householdMemberPath(householdId, request.auth.uid)).data.role == "admin";
+    }
+
+    function isTransferringHouseholdMemberRole(householdId, userId) {
+      return isHouseholdOwner(householdId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "role",
+          "updatedAt"
+        ])
+        && request.resource.data.updatedAt is string
+        && (
+          (
+            userId == request.auth.uid
+            && resource.data.role == "owner"
+            && request.resource.data.role == "admin"
+            && getAfter(/databases/$(database)/documents/households/$(householdId)).data.ownerId != request.auth.uid
+          )
+          || (
+            userId != request.auth.uid
+            && resource.data.status == "active"
+            && resource.data.role != "owner"
+            && request.resource.data.role == "owner"
+            && getAfter(/databases/$(database)/documents/households/$(householdId)).data.ownerId == userId
+          )
+        );
+    }
+
+    function isUpdatingOwnMemberProfile(householdId, userId) {
+      return isHouseholdMember(householdId)
+        && userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "displayName",
+          "email",
+          "photoURL",
+          "updatedAt"
+        ]);
+    }
+
+    function isTransferringHouseholdMembershipRole(userId, householdId) {
+      return isHouseholdOwner(householdId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "role",
+          "updatedAt"
+        ])
+        && request.resource.data.updatedAt is string
+        && (
+          (
+            userId == request.auth.uid
+            && resource.data.role == "owner"
+            && request.resource.data.role == "admin"
+            && getAfter(/databases/$(database)/documents/households/$(householdId)).data.ownerId != request.auth.uid
+          )
+          || (
+            userId != request.auth.uid
+            && resource.data.status == "active"
+            && resource.data.role != "owner"
+            && request.resource.data.role == "owner"
+            && getAfter(/databases/$(database)/documents/households/$(householdId)).data.ownerId == userId
+          )
+        );
+    }
+
     function canRemoveHouseholdMember(householdId, userId) {
       return isHouseholdAdmin(householdId)
         && userId != request.auth.uid
@@ -187,7 +264,8 @@ service cloud.firestore {
 
       match /householdMemberships/{householdId} {
         allow read, delete: if isSelf(userId);
-        allow update: if isSelf(userId)
+        allow update: if isTransferringHouseholdMembershipRole(userId, householdId)
+          || isSelf(userId)
           || isRemovingHouseholdMembershipLink(userId, householdId);
         allow create: if isCreatingOwnOwnerMembershipLink(userId, householdId)
           || isHouseholdMember(householdId)
@@ -198,7 +276,8 @@ service cloud.firestore {
     match /households/{householdId} {
       allow create: if isCreatingOwnHousehold();
       allow read, delete: if isHouseholdMember(householdId);
-      allow update: if isRenamingHousehold(householdId);
+      allow update: if isRenamingHousehold(householdId)
+        || isTransferringHouseholdOwnership(householdId);
 
       match /members/{userId} {
         allow create: if isCreatingOwnOwnerMembership(householdId, userId)
@@ -206,7 +285,8 @@ service cloud.firestore {
           || isCreatingOwnInvitedMember(householdId, userId);
         allow read, delete: if isHouseholdMember(householdId);
         allow update: if isRemovingHouseholdMember(householdId, userId)
-          || (isHouseholdMember(householdId) && userId == request.auth.uid);
+          || isTransferringHouseholdMemberRole(householdId, userId)
+          || isUpdatingOwnMemberProfile(householdId, userId);
       }
 
       match /items/{itemId} {

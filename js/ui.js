@@ -181,6 +181,9 @@ export function renderMembers(members, currentUserId = "", currentUserRole = "")
         && member.role !== "owner"
         && member.userId !== currentUserId
         && (member.role !== "admin" || currentUserRole === "owner");
+      const canTransferOwnership = currentUserRole === "owner"
+        && member.role !== "owner"
+        && member.userId !== currentUserId;
       const avatar = member.photoURL
         ? `<img class="member-photo" src="${escapeHtml(member.photoURL)}" alt="${escapeHtml(displayName)} profile photo" referrerpolicy="no-referrer" />`
         : `<span class="member-photo member-initials">${escapeHtml(getInitials(member))}</span>`;
@@ -192,7 +195,12 @@ export function renderMembers(members, currentUserId = "", currentUserRole = "")
             <strong>${escapeHtml(displayName)}</strong>
             <span>${escapeHtml(getRoleLabel(member.role))}</span>
           </div>
-          ${canRemove ? `<button class="small danger" type="button" data-action="remove-member" data-id="${escapeHtml(member.userId)}">Remove</button>` : ""}
+          ${(canTransferOwnership || canRemove) ? `
+            <div class="member-actions">
+              ${canTransferOwnership ? `<button class="small secondary" type="button" data-action="transfer-ownership" data-id="${escapeHtml(member.userId)}">Transfer Ownership</button>` : ""}
+              ${canRemove ? `<button class="small danger" type="button" data-action="remove-member" data-id="${escapeHtml(member.userId)}">Remove</button>` : ""}
+            </div>
+          ` : ""}
         </div>
       `;
     })

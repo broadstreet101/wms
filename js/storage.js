@@ -187,6 +187,61 @@ export async function removeHouseholdMember(householdId, userId, removedBy) {
   };
 }
 
+export async function transferHouseholdOwnership(householdId, currentOwnerId, newOwnerId) {
+  const updatedAt = new Date().toISOString();
+  const batch = writeBatch(db);
+
+  batch.set(
+    getHouseholdDocument(householdId),
+    {
+      ownerId: newOwnerId,
+      updatedAt
+    },
+    { merge: true }
+  );
+  batch.set(
+    getHouseholdMemberDocument(householdId, currentOwnerId),
+    {
+      role: "admin",
+      updatedAt
+    },
+    { merge: true }
+  );
+  batch.set(
+    getHouseholdMemberDocument(householdId, newOwnerId),
+    {
+      role: "owner",
+      updatedAt
+    },
+    { merge: true }
+  );
+  batch.set(
+    getUserMembershipDocument(currentOwnerId, householdId),
+    {
+      role: "admin",
+      updatedAt
+    },
+    { merge: true }
+  );
+  batch.set(
+    getUserMembershipDocument(newOwnerId, householdId),
+    {
+      role: "owner",
+      updatedAt
+    },
+    { merge: true }
+  );
+
+  await batch.commit();
+
+  return {
+    householdId,
+    currentOwnerId,
+    newOwnerId,
+    updatedAt
+  };
+}
+
 export async function updateHouseholdName(householdId, name) {
   const trimmedName = name.trim();
   const updatedAt = new Date().toISOString();
