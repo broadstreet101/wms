@@ -15,6 +15,7 @@ import {
   normalizeItem,
   normalizeLocation,
   replaceCloudItems,
+  removeHouseholdMember as removeCloudHouseholdMember,
   revokeHouseholdInvitation,
   saveCloudItem,
   saveHouseholdInvitation,
@@ -401,6 +402,46 @@ export async function updateHouseholdName(name) {
     warnFirestoreUnavailable("household rename", error);
     throw makeDataError("household-rename-failed", "This household could not be renamed.");
   }
+}
+
+export async function removeHouseholdMember(userId) {
+  if (!hasAuthenticatedUser()) return cachedMembers;
+
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return cachedMembers;
+
+  const member = cachedMembers.find(existing => existing.userId === userId);
+  const activeHousehold = await getActiveHousehold();
+
+  if (!member) {
+    throw makeDataError("member-not-found", "This household member was not found.");
+  }
+
+  if (member.userId === activeUser.uid) {
+    throw makeDataError("cannot-remove-self", "You cannot remove yourself in this phase.");
+  }
+
+  if (member.role === "owner") {
+    throw makeDataError("cannot-remove-owner", "The household owner cannot be removed.");
+  }
+
+  if (activeHousehold?.role !== "owner" && activeHousehold?.role !== "admin") {
+    throw makeDataError("not-household-admin", "Only a household owner or admin can remove members.");
+  }
+
+  if (member.role === "admin" && activeHousehold?.role !== "owner") {
+    throw makeDataError("owner-required", "Only the household owner can remove an admin.");
+  }
+
+  try {
+    await removeCloudHouseholdMember(householdId, userId, activeUser.uid);
+    cachedMembers = cachedMembers.filter(existing => existing.userId !== userId);
+  } catch (error) {
+    warnFirestoreUnavailable("member removal", error);
+    throw makeDataError("member-remove-failed", "This household member could not be removed.");
+  }
+
+  return cachedMembers;
 }
 
 export async function getMembers() {

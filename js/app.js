@@ -16,6 +16,7 @@ import {
   getLocations,
   getMembers,
   importItems,
+  removeHouseholdMember,
   revokeInvitation,
   saveLocation,
   saveItem as saveStoredItem,
@@ -162,7 +163,7 @@ function render() {
     directInvitationMessage,
     Boolean(currentUser && directInvitation)
   );
-  renderMembers(members);
+  renderMembers(members, currentUser?.uid || "", activeHousehold?.role || "");
   renderInvitations(invitations, Boolean(currentUser), canManageInvitations());
 }
 
@@ -548,6 +549,26 @@ elements.invitationsList.addEventListener("click", async event => {
       console.error("Revoke invitation failed:", error);
       alert(error.message || "This invitation could not be revoked.");
     }
+  }
+});
+
+elements.membersList.addEventListener("click", async event => {
+  const button = event.target.closest("button[data-action='remove-member']");
+  if (!button) return;
+
+  const member = members.find(existingMember => existingMember.userId === button.dataset.id);
+  if (!member) return;
+
+  const displayName = member.displayName || member.email || "this member";
+  const confirmed = confirm(`Remove ${displayName} from this household?`);
+  if (!confirmed) return;
+
+  try {
+    members = await removeHouseholdMember(member.userId);
+    render();
+  } catch (error) {
+    console.error("Remove member failed:", error);
+    alert(error.message || "This household member could not be removed.");
   }
 });
 

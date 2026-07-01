@@ -119,6 +119,46 @@ service cloud.firestore {
         && request.resource.data.updatedAt is string;
     }
 
+    function canRemoveHouseholdMember(householdId, userId) {
+      return isHouseholdAdmin(householdId)
+        && userId != request.auth.uid
+        && exists(householdMemberPath(householdId, userId))
+        && get(householdMemberPath(householdId, userId)).data.status == "active"
+        && get(householdMemberPath(householdId, userId)).data.role != "owner"
+        && (
+          get(householdMemberPath(householdId, userId)).data.role != "admin"
+          || isHouseholdOwner(householdId)
+        );
+    }
+
+    function isRemovingHouseholdMember(householdId, userId) {
+      return canRemoveHouseholdMember(householdId, userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "removedBy",
+          "removedAt",
+          "updatedAt"
+        ])
+        && request.resource.data.status == "removed"
+        && request.resource.data.removedBy == request.auth.uid
+        && request.resource.data.removedAt is string
+        && request.resource.data.updatedAt is string;
+    }
+
+    function isRemovingHouseholdMembershipLink(userId, householdId) {
+      return canRemoveHouseholdMember(householdId, userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "removedBy",
+          "removedAt",
+          "updatedAt"
+        ])
+        && request.resource.data.status == "removed"
+        && request.resource.data.removedBy == request.auth.uid
+        && request.resource.data.removedAt is string
+        && request.resource.data.updatedAt is string;
+    }
+
     function invitationRole(householdId, invitationId) {
       return get(householdInvitationPath(householdId, invitationId)).data.role;
     }
@@ -146,7 +186,9 @@ service cloud.firestore {
       allow read, write: if isSelf(userId);
 
       match /householdMemberships/{householdId} {
-        allow read, update, delete: if isSelf(userId);
+        allow read, delete: if isSelf(userId);
+        allow update: if isSelf(userId)
+          || isRemovingHouseholdMembershipLink(userId, householdId);
         allow create: if isCreatingOwnOwnerMembershipLink(userId, householdId)
           || isHouseholdMember(householdId)
           || isCreatingOwnInvitedMembership(userId, householdId);
@@ -162,7 +204,9 @@ service cloud.firestore {
         allow create: if isCreatingOwnOwnerMembership(householdId, userId)
           || isHouseholdMember(householdId)
           || isCreatingOwnInvitedMember(householdId, userId);
-        allow read, update, delete: if isHouseholdMember(householdId);
+        allow read, delete: if isHouseholdMember(householdId);
+        allow update: if isRemovingHouseholdMember(householdId, userId)
+          || (isHouseholdMember(householdId) && userId == request.auth.uid);
       }
 
       match /items/{itemId} {

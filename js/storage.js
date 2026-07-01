@@ -166,6 +166,27 @@ export async function loadHouseholdMembers(householdId) {
     .sort((a, b) => (a.displayName || a.email || "").localeCompare(b.displayName || b.email || ""));
 }
 
+export async function removeHouseholdMember(householdId, userId, removedBy) {
+  const removedAt = new Date().toISOString();
+  const removal = {
+    status: "removed",
+    removedBy,
+    removedAt,
+    updatedAt: removedAt
+  };
+
+  const batch = writeBatch(db);
+  batch.set(getHouseholdMemberDocument(householdId, userId), removal, { merge: true });
+  batch.set(getUserMembershipDocument(userId, householdId), removal, { merge: true });
+  await batch.commit();
+
+  return {
+    userId,
+    householdId,
+    ...removal
+  };
+}
+
 export async function updateHouseholdName(householdId, name) {
   const trimmedName = name.trim();
   const updatedAt = new Date().toISOString();

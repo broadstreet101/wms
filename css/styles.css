@@ -211,9 +211,16 @@ header p {
 .member,
 .invitation {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 0.6rem;
+}
+
+.member {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.invitation {
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .member-photo {

@@ -166,7 +166,7 @@ function getInitials(member) {
     .join("");
 }
 
-export function renderMembers(members) {
+export function renderMembers(members, currentUserId = "", currentUserRole = "") {
   elements.membersPanel.hidden = members.length === 0;
 
   if (members.length === 0) {
@@ -177,6 +177,10 @@ export function renderMembers(members) {
   elements.membersList.innerHTML = members
     .map(member => {
       const displayName = member.displayName || member.email || "Household member";
+      const canRemove = (currentUserRole === "owner" || currentUserRole === "admin")
+        && member.role !== "owner"
+        && member.userId !== currentUserId
+        && (member.role !== "admin" || currentUserRole === "owner");
       const avatar = member.photoURL
         ? `<img class="member-photo" src="${escapeHtml(member.photoURL)}" alt="${escapeHtml(displayName)} profile photo" referrerpolicy="no-referrer" />`
         : `<span class="member-photo member-initials">${escapeHtml(getInitials(member))}</span>`;
@@ -188,6 +192,7 @@ export function renderMembers(members) {
             <strong>${escapeHtml(displayName)}</strong>
             <span>${escapeHtml(getRoleLabel(member.role))}</span>
           </div>
+          ${canRemove ? `<button class="small danger" type="button" data-action="remove-member" data-id="${escapeHtml(member.userId)}">Remove</button>` : ""}
         </div>
       `;
     })
