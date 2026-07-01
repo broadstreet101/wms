@@ -397,7 +397,7 @@ elements.acceptInvitationButton.addEventListener("click", async () => {
     );
     await reloadSignedInData();
     directInvitation = null;
-    directInvitationMessage = `Invitation accepted. ${activeHousehold?.name || "Household"} is now active.`;
+    directInvitationMessage = `Invitation accepted. You're now viewing ${activeHousehold?.name || "this household"}.`;
     clearInvitationUrlParams();
     render();
     subscribeItems(syncItems);

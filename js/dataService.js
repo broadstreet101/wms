@@ -361,7 +361,10 @@ export async function getDirectInvitation(householdId, invitationId) {
     invitation = await loadHouseholdInvitation(householdId, invitationId);
   } catch (error) {
     warnFirestoreUnavailable("invitation load", error);
-    throw makeInvitationError("invitation-unavailable", "This invitation could not be loaded.");
+    throw makeInvitationError(
+      "invitation-unavailable",
+      "This invitation is invalid, expired, or not available for this Google account."
+    );
   }
 
   validateDirectInvitation(invitation, normalizedUserEmail);
@@ -377,7 +380,10 @@ export async function acceptInvitation(householdId, invitationId) {
     await setActiveHousehold(householdId);
   } catch (error) {
     warnFirestoreUnavailable("invitation acceptance", error);
-    throw makeInvitationError("acceptance-failed", "This invitation could not be accepted.");
+    throw makeInvitationError(
+      "acceptance-failed",
+      "This invitation could not be accepted. It may already be accepted, expired, or for a different Google account."
+    );
   }
 
   return getActiveHousehold();
@@ -389,11 +395,14 @@ function validateDirectInvitation(invitation, normalizedUserEmail) {
   }
 
   if (invitation.status !== "pending") {
-    throw makeInvitationError("not-pending", "This invitation is no longer pending.");
+    throw makeInvitationError("not-pending", "This invitation has already been accepted or is no longer pending.");
   }
 
   if (invitation.normalizedEmail !== normalizedUserEmail) {
-    throw makeInvitationError("email-mismatch", "This invitation is for a different email address.");
+    throw makeInvitationError(
+      "email-mismatch",
+      "This invitation is for a different email address. Sign in with the invited Google account."
+    );
   }
 
   const expiresAtMillis = invitation.expiresAtMillis || (
