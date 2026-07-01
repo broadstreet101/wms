@@ -38,6 +38,7 @@ export const elements = {
   saveHouseholdNameButton: document.getElementById("saveHouseholdNameButton"),
   cancelHouseholdNameButton: document.getElementById("cancelHouseholdNameButton"),
   householdSelect: document.getElementById("householdSelect"),
+  leaveHouseholdButton: document.getElementById("leaveHouseholdButton"),
   invitationAcceptancePanel: document.getElementById("invitationAcceptancePanel"),
   invitationAcceptanceDetails: document.getElementById("invitationAcceptanceDetails"),
   invitationAcceptanceMessage: document.getElementById("invitationAcceptanceMessage"),
@@ -127,7 +128,8 @@ export function renderHouseholdDisplay(
   activeHousehold,
   canRenameHousehold = false,
   isRenamingHousehold = false,
-  householdNameDraft = ""
+  householdNameDraft = "",
+  canLeaveHousehold = false
 ) {
   const hasMultipleHouseholds = households.length > 1;
   const householdName = activeHousehold?.name || "My Household";
@@ -138,6 +140,7 @@ export function renderHouseholdDisplay(
   elements.editHouseholdButton.hidden = !canRenameHousehold;
   elements.householdNameInput.value = householdNameDraft || householdName;
   elements.householdSelect.hidden = !hasMultipleHouseholds;
+  elements.leaveHouseholdButton.hidden = !canLeaveHousehold;
 
   if (!hasMultipleHouseholds) {
     elements.householdSelect.innerHTML = "";

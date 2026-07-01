@@ -187,6 +187,10 @@ export async function removeHouseholdMember(householdId, userId, removedBy) {
   };
 }
 
+export async function leaveHousehold(householdId, userId) {
+  return removeHouseholdMember(householdId, userId, userId);
+}
+
 export async function transferHouseholdOwnership(householdId, currentOwnerId, newOwnerId) {
   const updatedAt = new Date().toISOString();
   const batch = writeBatch(db);

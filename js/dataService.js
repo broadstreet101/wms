@@ -3,6 +3,7 @@ import {
   deleteCloudItem,
   ensureDefaultHousehold,
   isActiveHouseholdMember,
+  leaveHousehold as leaveCloudHousehold,
   loadCloudLocations,
   loadHouseholdInvitation,
   loadHouseholdMembers,
@@ -443,6 +444,54 @@ export async function removeHouseholdMember(userId) {
   }
 
   return cachedMembers;
+}
+
+export async function leaveHousehold() {
+  if (!hasAuthenticatedUser()) return null;
+
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return null;
+
+  const activeHousehold = await getActiveHousehold();
+  if (activeHousehold?.role === "owner") {
+    throw makeDataError("owner-cannot-leave", "Transfer ownership before leaving this household.");
+  }
+
+  try {
+    await leaveCloudHousehold(householdId, activeUser.uid);
+    unsubscribeItems();
+    unsubscribeMembers();
+    unsubscribeInvitations();
+    unsubscribeActiveHousehold();
+    localStorage.removeItem(getActiveHouseholdStorageKey(activeUser.uid));
+    activeHouseholdId = null;
+    activeHouseholdPromise = null;
+    cachedHouseholds = [];
+
+    const nextHouseholdId = await ensureActiveHousehold();
+    cachedItems = nextHouseholdId ? await loadCloudItems(nextHouseholdId) : [];
+    cachedLocations = nextHouseholdId ? await loadCloudLocations(nextHouseholdId) : [];
+    cachedMembers = nextHouseholdId ? await loadHouseholdMembers(nextHouseholdId) : [];
+    cachedInvitations = nextHouseholdId ? await loadHouseholdInvitations(nextHouseholdId) : [];
+
+    if (activeMembersCallback) {
+      subscribeMembers(activeMembersCallback);
+    }
+
+    if (activeInvitationsCallback) {
+      subscribeInvitations(activeInvitationsCallback);
+    }
+
+    if (activeHouseholdCallback) {
+      subscribeActiveHousehold(activeHouseholdCallback);
+    }
+  } catch (error) {
+    warnFirestoreUnavailable("household leave", error);
+    if (error.code === "owner-cannot-leave") throw error;
+    throw makeDataError("household-leave-failed", "This household could not be left.");
+  }
+
+  return getActiveHousehold();
 }
 
 export async function transferHouseholdOwnership(newOwnerId) {

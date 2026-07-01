@@ -16,6 +16,7 @@ import {
   getLocations,
   getMembers,
   importItems,
+  leaveHousehold,
   removeHouseholdMember,
   revokeInvitation,
   saveLocation,
@@ -72,6 +73,10 @@ function canManageInvitations() {
 
 function canRenameHousehold() {
   return activeHousehold?.role === "owner";
+}
+
+function canLeaveHousehold() {
+  return Boolean(currentUser && activeHousehold && activeHousehold.role !== "owner");
 }
 
 function getDirectInvitationParams() {
@@ -157,7 +162,8 @@ function render() {
     activeHousehold,
     canRenameHousehold(),
     householdRenameMode,
-    householdNameDraft
+    householdNameDraft,
+    canLeaveHousehold()
   );
   renderInvitationAcceptance(
     directInvitation,
@@ -462,6 +468,32 @@ elements.saveHouseholdNameButton.addEventListener("click", async () => {
     alert(error.message || "This household could not be renamed.");
   } finally {
     elements.saveHouseholdNameButton.disabled = false;
+  }
+});
+
+elements.leaveHouseholdButton.addEventListener("click", async () => {
+  if (activeHousehold?.role === "owner") {
+    alert("Transfer ownership before leaving this household.");
+    return;
+  }
+
+  const householdName = activeHousehold?.name || "this household";
+  const confirmed = confirm(`Leave ${householdName}? You will no longer see its shared items.`);
+  if (!confirmed) return;
+
+  try {
+    activeHousehold = await leaveHousehold();
+    await reloadSignedInData();
+    householdRenameMode = false;
+    householdNameDraft = "";
+    render();
+    subscribeItems(syncItems);
+    subscribeMembers(syncMembers);
+    subscribeInvitations(syncInvitations);
+    subscribeActiveHousehold(syncActiveHousehold);
+  } catch (error) {
+    console.error("Leave household failed:", error);
+    alert(error.message || "This household could not be left.");
   }
 });
 

@@ -236,6 +236,41 @@ service cloud.firestore {
         && request.resource.data.updatedAt is string;
     }
 
+    function isLeavingHouseholdMember(householdId, userId) {
+      return isSelf(userId)
+        && resource.data.status == "active"
+        && resource.data.role != "owner"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "removedBy",
+          "removedAt",
+          "updatedAt"
+        ])
+        && request.resource.data.status == "removed"
+        && request.resource.data.removedBy == request.auth.uid
+        && request.resource.data.removedAt is string
+        && request.resource.data.updatedAt is string;
+    }
+
+    function isLeavingHouseholdMembershipLink(userId, householdId) {
+      return isSelf(userId)
+        && resource.data.status == "active"
+        && resource.data.role != "owner"
+        && exists(householdMemberPath(householdId, userId))
+        && get(householdMemberPath(householdId, userId)).data.status == "active"
+        && get(householdMemberPath(householdId, userId)).data.role != "owner"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "removedBy",
+          "removedAt",
+          "updatedAt"
+        ])
+        && request.resource.data.status == "removed"
+        && request.resource.data.removedBy == request.auth.uid
+        && request.resource.data.removedAt is string
+        && request.resource.data.updatedAt is string;
+    }
+
     function invitationRole(householdId, invitationId) {
       return get(householdInvitationPath(householdId, invitationId)).data.role;
     }
@@ -265,7 +300,7 @@ service cloud.firestore {
       match /householdMemberships/{householdId} {
         allow read, delete: if isSelf(userId);
         allow update: if isTransferringHouseholdMembershipRole(userId, householdId)
-          || isSelf(userId)
+          || isLeavingHouseholdMembershipLink(userId, householdId)
           || isRemovingHouseholdMembershipLink(userId, householdId);
         allow create: if isCreatingOwnOwnerMembershipLink(userId, householdId)
           || isHouseholdMember(householdId)
@@ -285,6 +320,7 @@ service cloud.firestore {
           || isCreatingOwnInvitedMember(householdId, userId);
         allow read, delete: if isHouseholdMember(householdId);
         allow update: if isRemovingHouseholdMember(householdId, userId)
+          || isLeavingHouseholdMember(householdId, userId)
           || isTransferringHouseholdMemberRole(householdId, userId)
           || isUpdatingOwnMemberProfile(householdId, userId);
       }
