@@ -30,7 +30,13 @@ export const elements = {
   authEmail: document.getElementById("authEmail"),
   signOutButton: document.getElementById("signOutButton"),
   authStatus: document.getElementById("authStatus"),
+  householdDisplay: document.getElementById("householdDisplay"),
   householdName: document.getElementById("householdName"),
+  editHouseholdButton: document.getElementById("editHouseholdButton"),
+  householdEdit: document.getElementById("householdEdit"),
+  householdNameInput: document.getElementById("householdNameInput"),
+  saveHouseholdNameButton: document.getElementById("saveHouseholdNameButton"),
+  cancelHouseholdNameButton: document.getElementById("cancelHouseholdNameButton"),
   householdSelect: document.getElementById("householdSelect"),
   invitationAcceptancePanel: document.getElementById("invitationAcceptancePanel"),
   invitationAcceptanceDetails: document.getElementById("invitationAcceptanceDetails"),
@@ -116,12 +122,21 @@ export function renderLocationOptions(locations) {
     .join("");
 }
 
-export function renderHouseholdDisplay(households, activeHousehold) {
+export function renderHouseholdDisplay(
+  households,
+  activeHousehold,
+  canRenameHousehold = false,
+  isRenamingHousehold = false,
+  householdNameDraft = ""
+) {
   const hasMultipleHouseholds = households.length > 1;
   const householdName = activeHousehold?.name || "My Household";
 
+  elements.householdDisplay.hidden = !activeHousehold || isRenamingHousehold;
+  elements.householdEdit.hidden = !activeHousehold || !isRenamingHousehold;
   elements.householdName.textContent = activeHousehold ? `Household: ${householdName}` : "";
-  elements.householdName.hidden = !activeHousehold;
+  elements.editHouseholdButton.hidden = !canRenameHousehold;
+  elements.householdNameInput.value = householdNameDraft || householdName;
   elements.householdSelect.hidden = !hasMultipleHouseholds;
 
   if (!hasMultipleHouseholds) {

@@ -27,7 +27,15 @@
                 <strong id="authName"></strong>
                 <span id="authEmail"></span>
                 <span id="authStatus"></span>
-                <span id="householdName"></span>
+                <span class="household-display" id="householdDisplay">
+                    <span id="householdName"></span>
+                    <button id="editHouseholdButton" type="button" class="small ghost" hidden>Edit</button>
+                </span>
+                <span class="household-edit" id="householdEdit" hidden>
+                    <input id="householdNameInput" type="text" maxlength="80" aria-label="Household name" />
+                    <button id="saveHouseholdNameButton" type="button" class="small secondary">Save</button>
+                    <button id="cancelHouseholdNameButton" type="button" class="small ghost">Cancel</button>
+                </span>
                 <select id="householdSelect" hidden></select>
             </div>
             <button id="signOutButton" type="button" class="secondary">Sign Out</button>

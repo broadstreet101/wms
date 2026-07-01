@@ -32,6 +32,11 @@ service cloud.firestore {
         );
     }
 
+    function isHouseholdOwner(householdId) {
+      return isHouseholdMember(householdId)
+        && get(householdMemberPath(householdId, request.auth.uid)).data.role == "owner";
+    }
+
     function isCreatingOwnHousehold() {
       return signedIn()
         && request.resource.data.ownerId == request.auth.uid
@@ -104,6 +109,16 @@ service cloud.firestore {
         && request.resource.data.revokedAt is string;
     }
 
+    function isRenamingHousehold(householdId) {
+      return isHouseholdOwner(householdId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name",
+          "updatedAt"
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.updatedAt is string;
+    }
+
     function invitationRole(householdId, invitationId) {
       return get(householdInvitationPath(householdId, invitationId)).data.role;
     }
@@ -140,7 +155,8 @@ service cloud.firestore {
 
     match /households/{householdId} {
       allow create: if isCreatingOwnHousehold();
-      allow read, update, delete: if isHouseholdMember(householdId);
+      allow read, delete: if isHouseholdMember(householdId);
+      allow update: if isRenamingHousehold(householdId);
 
       match /members/{userId} {
         allow create: if isCreatingOwnOwnerMembership(householdId, userId)

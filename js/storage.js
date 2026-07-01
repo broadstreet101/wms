@@ -166,6 +166,26 @@ export async function loadHouseholdMembers(householdId) {
     .sort((a, b) => (a.displayName || a.email || "").localeCompare(b.displayName || b.email || ""));
 }
 
+export async function updateHouseholdName(householdId, name) {
+  const trimmedName = name.trim();
+  const updatedAt = new Date().toISOString();
+
+  await setDoc(
+    getHouseholdDocument(householdId),
+    {
+      name: trimmedName,
+      updatedAt
+    },
+    { merge: true }
+  );
+
+  return {
+    id: householdId,
+    name: trimmedName,
+    updatedAt
+  };
+}
+
 export async function loadHouseholdInvitations(householdId) {
   const snapshot = await getDocs(getHouseholdInvitationsCollection(householdId));
 

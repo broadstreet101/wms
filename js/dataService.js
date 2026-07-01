@@ -20,11 +20,13 @@ import {
   saveHouseholdInvitation,
   saveCloudLocation,
   saveItems,
-  saveLocations
+  saveLocations,
+  updateHouseholdName as saveCloudHouseholdName
 } from "./storage.js";
 import { db } from "./firebase.js";
 import {
   collection,
+  doc,
   onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
@@ -36,6 +38,8 @@ let activeMembersUnsubscribe = null;
 let activeMembersCallback = null;
 let activeInvitationsUnsubscribe = null;
 let activeInvitationsCallback = null;
+let activeHouseholdUnsubscribe = null;
+let activeHouseholdCallback = null;
 let cachedItems = loadItems();
 let cachedLocations = loadLocations();
 let cachedHouseholds = [];
@@ -66,6 +70,10 @@ function getHouseholdInvitationsCollection(householdId) {
   return collection(db, "households", householdId, "invitations");
 }
 
+function getHouseholdDocument(householdId) {
+  return doc(db, "households", householdId);
+}
+
 function findMatchingLocation(locations, name) {
   const normalizedName = name.trim().toLocaleLowerCase();
   return locations.find(location => location.name.toLocaleLowerCase() === normalizedName);
@@ -94,6 +102,21 @@ function makeInvitationError(code, message) {
   const error = new Error(message);
   error.code = code;
   return error;
+}
+
+function makeDataError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function cacheHousehold(household) {
+  const existingHousehold = cachedHouseholds.find(existing => existing.id === household.id);
+
+  cachedHouseholds = [
+    ...cachedHouseholds.filter(existing => existing.id !== household.id),
+    { ...existingHousehold, ...household }
+  ].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 }
 
 function normalizeMembersSnapshot(snapshot) {
@@ -158,8 +181,10 @@ export function setAuthenticatedUser(user) {
     unsubscribeItems();
     unsubscribeMembers();
     unsubscribeInvitations();
+    unsubscribeActiveHousehold();
     activeMembersCallback = null;
     activeInvitationsCallback = null;
+    activeHouseholdCallback = null;
     activeHouseholdId = null;
     activeHouseholdPromise = null;
     cachedHouseholds = [];
@@ -216,6 +241,10 @@ export async function setActiveHousehold(householdId) {
 
   if (activeInvitationsCallback) {
     subscribeInvitations(activeInvitationsCallback);
+  }
+
+  if (activeHouseholdCallback) {
+    subscribeActiveHousehold(activeHouseholdCallback);
   }
 
   return getActiveHousehold();
@@ -308,6 +337,70 @@ export function subscribeInvitations(callback) {
   );
 
   return unsubscribeInvitations;
+}
+
+export function unsubscribeActiveHousehold() {
+  if (!activeHouseholdUnsubscribe) return;
+
+  const unsubscribe = activeHouseholdUnsubscribe;
+  activeHouseholdUnsubscribe = null;
+  unsubscribe();
+}
+
+export function subscribeActiveHousehold(callback) {
+  unsubscribeActiveHousehold();
+  activeHouseholdCallback = callback;
+
+  if (!isUsingFirestore()) {
+    return unsubscribeActiveHousehold;
+  }
+
+  activeHouseholdUnsubscribe = onSnapshot(
+    getHouseholdDocument(activeHouseholdId),
+    snapshot => {
+      if (!snapshot.exists()) return;
+
+      const existing = cachedHouseholds.find(household => household.id === activeHouseholdId);
+      const household = {
+        ...existing,
+        id: activeHouseholdId,
+        ...snapshot.data()
+      };
+
+      cacheHousehold(household);
+      callback(household, cachedHouseholds);
+    },
+    error => {
+      warnFirestoreUnavailable("household listener", error);
+    }
+  );
+
+  return unsubscribeActiveHousehold;
+}
+
+export async function updateHouseholdName(name) {
+  if (!hasAuthenticatedUser()) return null;
+
+  const householdId = await ensureActiveHousehold();
+  const trimmedName = (name || "").trim();
+  if (!householdId || !trimmedName) return null;
+
+  const activeHousehold = await getActiveHousehold();
+  if (activeHousehold?.role !== "owner") {
+    throw makeDataError("not-owner", "Only the household owner can rename this household.");
+  }
+
+  try {
+    const updatedHousehold = {
+      ...activeHousehold,
+      ...(await saveCloudHouseholdName(householdId, trimmedName))
+    };
+    cacheHousehold(updatedHousehold);
+    return updatedHousehold;
+  } catch (error) {
+    warnFirestoreUnavailable("household rename", error);
+    throw makeDataError("household-rename-failed", "This household could not be renamed.");
+  }
 }
 
 export async function getMembers() {

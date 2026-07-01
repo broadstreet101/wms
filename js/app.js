@@ -21,12 +21,15 @@ import {
   saveItem as saveStoredItem,
   setActiveHousehold,
   setAuthenticatedUser,
+  subscribeActiveHousehold,
   subscribeItems,
   subscribeInvitations,
   subscribeMembers,
+  unsubscribeActiveHousehold,
   unsubscribeItems,
   unsubscribeInvitations,
   unsubscribeMembers,
+  updateHouseholdName,
   updateItem as updateStoredItem
 } from "./dataService.js";
 import { getFilteredItems } from "./search.js";
@@ -58,9 +61,15 @@ let directInvitationMessage = "";
 let directInvitationParams = getDirectInvitationParams();
 let currentUser = null;
 let signInInProgress = false;
+let householdRenameMode = false;
+let householdNameDraft = "";
 
 function canManageInvitations() {
   return activeHousehold?.role === "owner" || activeHousehold?.role === "admin";
+}
+
+function canRenameHousehold() {
+  return activeHousehold?.role === "owner";
 }
 
 function getDirectInvitationParams() {
@@ -141,7 +150,13 @@ function render() {
 
   renderItems(items, filtered);
   renderLocationOptions(getLocationSuggestions());
-  renderHouseholdDisplay(households, activeHousehold);
+  renderHouseholdDisplay(
+    households,
+    activeHousehold,
+    canRenameHousehold(),
+    householdRenameMode,
+    householdNameDraft
+  );
   renderInvitationAcceptance(
     directInvitation,
     directInvitationMessage,
@@ -163,6 +178,12 @@ function syncMembers(nextMembers) {
 
 function syncInvitations(nextInvitations) {
   invitations = nextInvitations;
+  render();
+}
+
+function syncActiveHousehold(nextActiveHousehold, nextHouseholds) {
+  activeHousehold = nextActiveHousehold;
+  households = nextHouseholds;
   render();
 }
 
@@ -293,6 +314,8 @@ function updateAuthDisplay(user, message) {
     activeHousehold = null;
     members = [];
     invitations = [];
+    householdRenameMode = false;
+    householdNameDraft = "";
     elements.authPhoto.removeAttribute("src");
     elements.authPhoto.alt = "";
     elements.authPhoto.hidden = true;
@@ -340,12 +363,15 @@ function setupAuth() {
       unsubscribeItems();
       unsubscribeMembers();
       unsubscribeInvitations();
+      unsubscribeActiveHousehold();
       items = await getItems();
       locations = await getLocations();
       households = [];
       activeHousehold = null;
       members = [];
       invitations = [];
+      householdRenameMode = false;
+      householdNameDraft = "";
       await loadDirectInvitationForCurrentUser();
       updateAuthDisplay(null);
       render();
@@ -361,6 +387,7 @@ function setupAuth() {
     subscribeItems(syncItems);
     subscribeMembers(syncMembers);
     subscribeInvitations(syncInvitations);
+    subscribeActiveHousehold(syncActiveHousehold);
   });
 }
 
@@ -384,10 +411,56 @@ elements.householdSelect.addEventListener("change", async () => {
   locations = await getLocations();
   members = await getMembers();
   invitations = await getInvitations();
+  householdRenameMode = false;
+  householdNameDraft = "";
   render();
   subscribeItems(syncItems);
   subscribeMembers(syncMembers);
   subscribeInvitations(syncInvitations);
+  subscribeActiveHousehold(syncActiveHousehold);
+});
+
+elements.editHouseholdButton.addEventListener("click", () => {
+  if (!canRenameHousehold()) return;
+
+  householdRenameMode = true;
+  householdNameDraft = activeHousehold?.name || "";
+  render();
+  elements.householdNameInput.focus();
+  elements.householdNameInput.select();
+});
+
+elements.householdNameInput.addEventListener("input", () => {
+  householdNameDraft = elements.householdNameInput.value;
+});
+
+elements.cancelHouseholdNameButton.addEventListener("click", () => {
+  householdRenameMode = false;
+  householdNameDraft = "";
+  render();
+});
+
+elements.saveHouseholdNameButton.addEventListener("click", async () => {
+  const name = elements.householdNameInput.value.trim();
+  if (!name) {
+    alert("Enter a household name before saving.");
+    return;
+  }
+
+  elements.saveHouseholdNameButton.disabled = true;
+
+  try {
+    activeHousehold = await updateHouseholdName(name);
+    households = await getHouseholds();
+    householdRenameMode = false;
+    householdNameDraft = "";
+    render();
+  } catch (error) {
+    console.error("Household rename failed:", error);
+    alert(error.message || "This household could not be renamed.");
+  } finally {
+    elements.saveHouseholdNameButton.disabled = false;
+  }
 });
 
 elements.acceptInvitationButton.addEventListener("click", async () => {
@@ -408,6 +481,7 @@ elements.acceptInvitationButton.addEventListener("click", async () => {
     subscribeItems(syncItems);
     subscribeMembers(syncMembers);
     subscribeInvitations(syncInvitations);
+    subscribeActiveHousehold(syncActiveHousehold);
   } catch (error) {
     directInvitationMessage = error.message || "This invitation could not be accepted.";
     render();
