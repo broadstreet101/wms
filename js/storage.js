@@ -190,6 +190,28 @@ export async function saveHouseholdInvitation(householdId, invitation) {
   return normalized;
 }
 
+export async function revokeHouseholdInvitation(householdId, invitationId, userId) {
+  const revokedAt = new Date().toISOString();
+
+  await setDoc(
+    getHouseholdInvitationDocument(householdId, invitationId),
+    {
+      status: "revoked",
+      revokedBy: userId,
+      revokedAt
+    },
+    { merge: true }
+  );
+
+  return {
+    id: invitationId,
+    householdId,
+    status: "revoked",
+    revokedBy: userId,
+    revokedAt
+  };
+}
+
 export async function loadHouseholdInvitation(householdId, invitationId) {
   const snapshot = await getDoc(getHouseholdInvitationDocument(householdId, invitationId));
   if (!snapshot.exists()) return null;
@@ -441,6 +463,8 @@ export function normalizeInvitation(invitation) {
     invitedAt: invitation.invitedAt || now,
     acceptedBy: invitation.acceptedBy || "",
     acceptedAt: invitation.acceptedAt || "",
+    revokedBy: invitation.revokedBy || "",
+    revokedAt: invitation.revokedAt || "",
     expiresAt: invitation.expiresAt || "",
     expiresAtMillis: invitation.expiresAtMillis || (invitation.expiresAt ? Date.parse(invitation.expiresAt) : null)
   };

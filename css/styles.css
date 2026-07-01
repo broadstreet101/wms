@@ -238,6 +238,12 @@ header p {
   justify-self: start;
 }
 
+.invitation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
 .invitation-acceptance-details {
   display: grid;
   gap: 0.2rem;

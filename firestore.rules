@@ -24,6 +24,14 @@ service cloud.firestore {
         && get(householdMemberPath(householdId, request.auth.uid)).data.status == "active";
     }
 
+    function isHouseholdAdmin(householdId) {
+      return isHouseholdMember(householdId)
+        && (
+          get(householdMemberPath(householdId, request.auth.uid)).data.role == "owner"
+          || get(householdMemberPath(householdId, request.auth.uid)).data.role == "admin"
+        );
+    }
+
     function isCreatingOwnHousehold() {
       return signedIn()
         && request.resource.data.ownerId == request.auth.uid
@@ -83,6 +91,19 @@ service cloud.firestore {
         && request.resource.data.acceptedAt is string;
     }
 
+    function isRevokingPendingInvitation(householdId, invitationId) {
+      return isHouseholdAdmin(householdId)
+        && resource.data.status == "pending"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "revokedBy",
+          "revokedAt"
+        ])
+        && request.resource.data.status == "revoked"
+        && request.resource.data.revokedBy == request.auth.uid
+        && request.resource.data.revokedAt is string;
+    }
+
     function invitationRole(householdId, invitationId) {
       return get(householdInvitationPath(householdId, invitationId)).data.role;
     }
@@ -140,7 +161,7 @@ service cloud.firestore {
         allow get: if isHouseholdMember(householdId)
           || isOwnPendingInvitation(householdId, invitationId);
         allow list, create, delete: if isHouseholdMember(householdId);
-        allow update: if isHouseholdMember(householdId)
+        allow update: if isRevokingPendingInvitation(householdId, invitationId)
           || isAcceptingOwnInvitation(householdId, invitationId);
       }
     }

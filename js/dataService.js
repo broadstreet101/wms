@@ -15,6 +15,7 @@ import {
   normalizeItem,
   normalizeLocation,
   replaceCloudItems,
+  revokeHouseholdInvitation,
   saveCloudItem,
   saveHouseholdInvitation,
   saveCloudLocation,
@@ -467,6 +468,34 @@ export async function createInvitation(invitation) {
   }
 
   return savedInvitation;
+}
+
+export async function revokeInvitation(invitationId) {
+  if (!hasAuthenticatedUser()) return null;
+
+  const householdId = await ensureActiveHousehold();
+  if (!householdId) return null;
+
+  const invitation = cachedInvitations.find(existing => existing.id === invitationId)
+    || await loadHouseholdInvitation(householdId, invitationId);
+
+  if (!invitation) {
+    throw makeInvitationError("not-found", "This invitation was not found.");
+  }
+
+  if (invitation.status !== "pending") {
+    throw makeInvitationError("not-pending", "Only pending invitations can be revoked.");
+  }
+
+  try {
+    await revokeHouseholdInvitation(householdId, invitationId, activeUser.uid);
+    cachedInvitations = cachedInvitations.filter(existing => existing.id !== invitationId);
+  } catch (error) {
+    warnFirestoreUnavailable("invitation revoke", error);
+    throw makeInvitationError("revoke-failed", "This invitation could not be revoked.");
+  }
+
+  return cachedInvitations;
 }
 
 export async function getItems() {

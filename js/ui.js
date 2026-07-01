@@ -197,7 +197,7 @@ export function renderInvitationAcceptance(invitation, message, canAccept) {
   `;
 }
 
-export function renderInvitations(invitations, isSignedIn) {
+export function renderInvitations(invitations, isSignedIn, canManageInvitations = false) {
   elements.invitationsPanel.hidden = !isSignedIn;
   elements.invitationForm.hidden = !isSignedIn;
 
@@ -218,7 +218,10 @@ export function renderInvitations(invitations, isSignedIn) {
           <strong>${escapeHtml(invitation.email)}</strong>
           <span>${escapeHtml(getRoleLabel(invitation.role))} - ${escapeHtml(invitation.status)}</span>
         </div>
-        <button class="small secondary" type="button" data-action="copy-invite-link" data-id="${escapeHtml(invitation.id)}">Copy Invite Link</button>
+        <div class="invitation-actions">
+          <button class="small secondary" type="button" data-action="copy-invite-link" data-id="${escapeHtml(invitation.id)}">Copy Invite Link</button>
+          ${canManageInvitations ? `<button class="small danger" type="button" data-action="revoke-invitation" data-id="${escapeHtml(invitation.id)}">Revoke</button>` : ""}
+        </div>
       </div>
     `)
     .join("");

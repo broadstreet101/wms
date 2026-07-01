@@ -16,6 +16,7 @@ import {
   getLocations,
   getMembers,
   importItems,
+  revokeInvitation,
   saveLocation,
   saveItem as saveStoredItem,
   setActiveHousehold,
@@ -57,6 +58,10 @@ let directInvitationMessage = "";
 let directInvitationParams = getDirectInvitationParams();
 let currentUser = null;
 let signInInProgress = false;
+
+function canManageInvitations() {
+  return activeHousehold?.role === "owner" || activeHousehold?.role === "admin";
+}
 
 function getDirectInvitationParams() {
   const params = new URLSearchParams(window.location.search);
@@ -143,7 +148,7 @@ function render() {
     Boolean(currentUser && directInvitation)
   );
   renderMembers(members);
-  renderInvitations(invitations, Boolean(currentUser));
+  renderInvitations(invitations, Boolean(currentUser), canManageInvitations());
 }
 
 function syncItems(nextItems) {
@@ -439,21 +444,36 @@ elements.invitationForm.addEventListener("submit", async event => {
 });
 
 elements.invitationsList.addEventListener("click", async event => {
-  const button = event.target.closest("button[data-action='copy-invite-link']");
+  const button = event.target.closest("button[data-action]");
   if (!button) return;
 
   const invitation = invitations.find(existingInvitation => existingInvitation.id === button.dataset.id);
   if (!invitation) return;
 
-  try {
-    await copyText(makeInvitationLink(invitation));
-    button.textContent = "Copied";
-    window.setTimeout(() => {
-      button.textContent = "Copy Invite Link";
-    }, 1600);
-  } catch (error) {
-    console.error("Copy invite link failed:", error);
-    alert("Copy failed. Check the browser console for details.");
+  if (button.dataset.action === "copy-invite-link") {
+    try {
+      await copyText(makeInvitationLink(invitation));
+      button.textContent = "Copied";
+      window.setTimeout(() => {
+        button.textContent = "Copy Invite Link";
+      }, 1600);
+    } catch (error) {
+      console.error("Copy invite link failed:", error);
+      alert("Copy failed. Check the browser console for details.");
+    }
+  }
+
+  if (button.dataset.action === "revoke-invitation") {
+    const confirmed = confirm(`Revoke invitation for ${invitation.email}?`);
+    if (!confirmed) return;
+
+    try {
+      invitations = await revokeInvitation(invitation.id);
+      render();
+    } catch (error) {
+      console.error("Revoke invitation failed:", error);
+      alert(error.message || "This invitation could not be revoked.");
+    }
   }
 });
 
